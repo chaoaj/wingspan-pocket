@@ -1,5 +1,7 @@
 # Wingspan Pocket (fan-made p5.js edition)
 
+[Production url](https://chaoaj.github.io/wingspan-pocket/)
+
 A browser version of *Wingspan Pocket*, built from the published rulebook, player aid and Automa solo rules. Play solo against Automa or pass-and-play with 2 to 4 people on one screen.
 
 All artwork is original. Bird portraits and food icons are drawn procedurally with **p5.js** from small shape and color recipes, so no published card art is reproduced. Species names, scientific names and approximate wingspans are real. Costs, points, egg limits, powers, flavor text, goal cards and Automa cards are original designs that follow the rulebook's structure, because the actual card lists are not printed in the rulebooks.
