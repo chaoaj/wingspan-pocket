@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wingspan Pocket Online</title>
+<meta name="description" content="A fan-made, accessible p5.js edition of Wingspan Pocket with a solo Automa opponent and hot-seat play.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Rokkitt:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!--BODY-START-->
+<a class="skip" href="#prompt">Skip to current action</a>
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><span class="brand-name">Wingspan <em>Pocket</em></span></div>
+  <div class="top-actions">
+    <span id="round" class="round" aria-live="off"></span>
+    <button type="button" id="btn-rules">How to play</button>
+    <button type="button" id="btn-new">New game</button>
+  </div>
+</header>
+<div id="confirm-new" class="confirm" role="alertdialog" aria-labelledby="confirm-text" hidden>
+  <p id="confirm-text">Abandon the current game and start a new one?</p>
+  <button type="button" id="confirm-yes" class="primary">Start a new game</button>
+  <button type="button" id="confirm-no">Keep playing</button>
+</div>
+
+<main>
+  <div id="loading" class="loading"><p id="loading-status" role="status">Painting birds…</p></div>
+
+  <section id="setup" class="setup" hidden aria-labelledby="setup-title">
+    <h1 id="setup-title" tabindex="-1">Wingspan <em>Pocket</em></h1>
+    <p class="lede">Build a flock of six birds from around the world. Each turn, take one Nest action, then activate the brown powers in your Flock from left to right.</p>
+    <form id="setup-form">
+      <fieldset>
+        <legend>Who is playing?</legend>
+        <label class="radio"><input type="radio" name="mode" id="mode-solo" value="solo" checked> Solo against Automa</label>
+        <label class="radio"><input type="radio" name="mode" id="mode-hot" value="hot"> 2 to 4 players sharing this screen</label>
+      </fieldset>
+      <fieldset id="solo-opts">
+        <legend>Solo options</legend>
+        <label for="solo-name">Your name</label>
+        <input id="solo-name" type="text" value="You" autocomplete="nickname">
+        <label for="difficulty">Automa difficulty</label>
+        <select id="difficulty">
+          <option value="easy">Easier (cards 1 to 6)</option>
+          <option value="normal" selected>Normal (cards 1 to 8, one set aside)</option>
+          <option value="hard">Harder (hard cards 1 to 3)</option>
+        </select>
+      </fieldset>
+      <fieldset id="hot-opts" hidden>
+        <legend>Players</legend>
+        <label for="hot-count">Number of players</label>
+        <select id="hot-count"><option>2</option><option>3</option><option>4</option></select>
+        <div class="names">
+          <div id="hot-name-wrap-1"><label for="hot-name-1">Player 1 name</label><input id="hot-name-1" type="text" value="Player 1"></div>
+          <div id="hot-name-wrap-2"><label for="hot-name-2">Player 2 name</label><input id="hot-name-2" type="text" value="Player 2"></div>
+          <div id="hot-name-wrap-3"><label for="hot-name-3">Player 3 name</label><input id="hot-name-3" type="text" value="Player 3"></div>
+          <div id="hot-name-wrap-4"><label for="hot-name-4">Player 4 name</label><input id="hot-name-4" type="text" value="Player 4"></div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Advanced rules</legend>
+        <label class="check"><input type="checkbox" id="opt-goals"> Use goal cards (always on against Automa)</label>
+        <label class="check"><input type="checkbox" id="opt-choose"> Choose which 2 of your 6 starting cards are birds</label>
+      </fieldset>
+      <button type="submit" class="primary big">Start game</button>
+    </form>
+    <p class="fine">Fan-made study project based on the Wingspan Pocket rulebooks. Bird portraits, card stats and text are original; species facts are real. Wingspan is a trademark of Stonemaier Games.</p>
+  </section>
+
+  <div id="game" hidden>
+    <section id="prompt" class="prompt" aria-label="Current action"></section>
+    <section id="results" class="results" hidden aria-labelledby="results-title"></section>
+    <div class="layout">
+      <div class="main-col">
+        <section id="supply" class="supply" aria-label="Supply"></section>
+        <div id="board-me"></div>
+        <div id="board-others"></div>
+      </div>
+      <aside class="log" aria-labelledby="log-title">
+        <h2 id="log-title" class="sec-title">Game log</h2>
+        <ol id="log-list" reversed></ol>
+      </aside>
+    </div>
+  </div>
+  <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+</main>
+
+<dialog id="rules" aria-labelledby="rules-title">
+  <div class="dlg-head"><h2 id="rules-title">How to play</h2><button type="button" id="rules-close">Close</button></div>
+  <div class="dlg-body">
+    <h3>Goal</h3>
+    <p>Score the most points from birds in your Flock, eggs, tucked cards and (advanced) goals. The game ends when a player has 6 birds in their Flock and everyone has had the same number of turns.</p>
+    <h3>Cards</h3>
+    <p>Every card is double-sided: a bird on one side and food on the other. Cards stay the way you gained them. Your Reserve holds both kinds face up.</p>
+    <h3>On your turn</h3>
+    <ol>
+      <li><b>Take one Nest action.</b>
+        <ul>
+          <li><b>Play a bird:</b> pay its food by discarding food cards (any 2 food cards can stand in for 1 food) and pay any egg cost from your Nest or birds. The bird joins the right end of your Flock.</li>
+          <li><b>Draw 2 cards:</b> take face-up birds from the supply and/or top cards of the food decks, in any mix. If 3 or more food decks show exactly the same food, you may discard those top cards first.</li>
+          <li><b>Lay up to 3 eggs:</b> each on a different card with room. The Nest holds 3; each bird holds up to its egg limit.</li>
+        </ul></li>
+      <li><b>Activate brown powers</b> from left to right. Every power is optional, including on the bird you just played. Green powers are ongoing.</li>
+      <li><b>Refill</b> empty bird slots from the food deck beside them.</li>
+    </ol>
+    <h3>Powers</h3>
+    <ul>
+      <li><b>Arrow powers</b> (“… to …”): pay the first part to gain the second.</li>
+      <li><b>Hunt:</b> reveal the bird on the back of a food deck's top card. Under the listed wingspan, tuck it; otherwise discard it.</li>
+      <li><b>Tuck:</b> slide a card from your Reserve behind the bird. Each tucked card scores 1 point.</li>
+      <li><b>All players:</b> everyone draws the top card of the food deck you choose. Against Automa, she tucks a card from the discard pile instead.</li>
+    </ul>
+    <h3>Scoring</h3>
+    <p>Bird points + 1 per egg + 1 per tucked card + 1 per egg on birds matching each goal. Ties go to the player with more cards in their Reserve.</p>
+    <h3>Automa</h3>
+    <p>Each Automa turn reveals a card: she gains food cards and tucks supply birds under her Nest, plays a bird when she has enough food cards (returning 1 egg), then lays eggs from right to left. She scores 3 per bird, 3 per Nest egg, 1 per egg on birds, 1 per tucked card, plus goals.</p>
+    <h3>Keyboard</h3>
+    <p>Use Tab to move between buttons and selectable cards, and Enter or Space to choose. The current instruction is always at the top of the page.</p>
+  </div>
+</dialog>
+<!--BODY-END-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/art.js"></script>
+</body>
+</html>

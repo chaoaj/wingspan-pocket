@@ -1,0 +1,1880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wingspan Pocket Online</title>
+<meta name="description" content="A fan-made, accessible p5.js edition of Wingspan Pocket with a solo Automa opponent and hot-seat play.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Rokkitt:wght@500;700&display=swap">
+<style>
+/* Layout: a field-guide table — sticky instruction strip on top, supply and flocks in the main column, game log at the side. */
+:root {
+  --paper: #e6ede9;        /* page: cool lichen paper */
+  --surface: #f6f8f5;      /* panels */
+  --ink: #17262a;          /* primary text */
+  --muted: #44575a;        /* secondary text (7:1 on surface) */
+  --line: #a8b8b5;         /* hairlines */
+  --accent: #1d5f6b;       /* teal ink: links, primary buttons */
+  --accent-ink: #ffffff;
+  --sel: #b0480a;          /* selectable outline (≥3:1 on paper & card) */
+  --sel-ink: #ffffff;
+  --focus: #0b4fc4;
+  --card: #fbfbf7;         /* physical card stock, light in both themes */
+  --card-ink: #1b2326;
+  --card-muted: #4a575a;
+  --brown: #6a3c1b;        /* brown power band, white text 9:1 */
+  --green: #1d5636;        /* green power band, white text 8:1 */
+  --none: #e2e4df;
+  --chip: #d5e1de;
+  --flash: #fff3c4;
+  --flash-ink: #3d3000;
+  --font-display: "Rokkitt", "Rockwell", "Roboto Slab", Georgia, serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111a1c; --surface: #1a2629; --ink: #e5eeec; --muted: #a9bdbc; --line: #3b5054;
+    --accent: #7cc4cd; --accent-ink: #0b1a1d; --sel: #f2a05a; --sel-ink: #1b1100; --focus: #8ab4ff;
+    --card: #eceee8; --chip: #2a3b3f; --flash: #4a3e0c; --flash-ink: #fff3c4; --none: #d9dcd5;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111a1c; --surface: #1a2629; --ink: #e5eeec; --muted: #a9bdbc; --line: #3b5054;
+  --accent: #7cc4cd; --accent-ink: #0b1a1d; --sel: #f2a05a; --sel-ink: #1b1100; --focus: #8ab4ff;
+  --card: #eceee8; --chip: #2a3b3f; --flash: #4a3e0c; --flash-ink: #fff3c4; --none: #d9dcd5;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 32px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+em { font-style: italic; }
+button, input, select { font: inherit; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.muted { color: var(--muted); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.skip { position: absolute; left: -999px; top: 8px; background: var(--accent); color: var(--accent-ink); padding: 8px 12px; border-radius: 6px; z-index: 50; }
+.skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
+
+/* buttons */
+button {
+  border: 2px solid var(--accent); background: var(--surface); color: var(--accent);
+  border-radius: 999px; padding: 8px 16px; font-weight: 700; cursor: pointer; min-height: 44px;
+}
+button:hover:not(:disabled) { background: var(--chip); }
+button.primary { background: var(--accent); color: var(--accent-ink); }
+button.primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--accent); }
+button:disabled { opacity: 1; border-color: var(--line); color: var(--muted); background: transparent; cursor: not-allowed; text-decoration: line-through; }
+button.big { font-size: 1.15rem; padding: 12px 28px; }
+
+/* top bar */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; letter-spacing: 0.01em; }
+.brand-name em { font-weight: 500; color: var(--accent); }
+.mark { width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(#f1d2a8 0 72deg, #f3e09a 0 144deg, #a9d0f0 0 216deg, #f5b3b3 0 288deg, #d3cdc5 0); border: 2px solid var(--ink); }
+.top-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.round { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 700; margin-right: 4px; }
+.confirm { background: var(--surface); border: 2px solid var(--sel); border-radius: var(--r); padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.confirm p { margin: 0; flex: 1 1 220px; font-weight: 700; }
+
+/* loading & setup */
+.loading { padding: 64px 0; text-align: center; font-family: var(--font-display); font-size: 1.4rem; color: var(--muted); }
+.setup { max-width: 640px; margin: 8px auto 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px clamp(16px, 4vw, 36px); }
+.setup h1 { font-size: clamp(2.2rem, 7vw, 3.4rem); }
+.setup h1 em { color: var(--accent); font-weight: 500; }
+.lede { font-size: 1.1rem; max-width: 60ch; }
+.setup form { display: grid; gap: 16px; }
+fieldset { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 16px 16px; display: grid; gap: 8px; margin: 0; min-width: 0; }
+legend { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; padding: 0 6px; }
+label { font-weight: 700; }
+label.radio, label.check { font-weight: 400; display: flex; gap: 10px; align-items: center; min-height: 32px; }
+input[type="radio"], input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+input[type="text"], select { border: 2px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--paper); color: var(--ink); min-height: 44px; max-width: 100%; }
+.names { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.names > div { display: grid; gap: 4px; }
+.fine { font-size: 0.85rem; color: var(--muted); margin-top: 20px; }
+
+/* prompt strip */
+.prompt {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--surface); border: 2px solid var(--accent); border-radius: var(--r);
+  padding: 12px 16px; margin-bottom: 16px; box-shadow: 0 6px 18px -12px rgba(0,0,0,.5);
+  max-height: 60vh; overflow-y: auto;
+}
+.prompt-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.prompt h2 { font-size: 1.45rem; }
+.prompt h2:focus { outline: none; }
+.prompt h2:focus-visible { outline: 3px solid var(--focus); }
+.who { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: var(--chip); padding: 2px 10px; border-radius: 999px; }
+.who.automa { background: var(--accent); color: var(--accent-ink); }
+.prompt-text { margin: 6px 0; max-width: 75ch; }
+.flash { background: var(--flash); color: var(--flash-ink); border-radius: 6px; padding: 6px 10px; margin: 8px 0; font-weight: 700; }
+.hint, .multi-status { font-size: 0.9rem; color: var(--muted); margin: 4px 0; }
+.multi-status { font-weight: 700; color: var(--ink); }
+.prompt-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.start-hand { margin-top: 12px; }
+
+/* automa card */
+.automa-card { display: inline-grid; gap: 6px; background: var(--card); color: var(--card-ink); border: 2px solid var(--card-ink); border-radius: 8px; padding: 10px 12px; margin: 6px 0; max-width: 100%; }
+.ac-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ac-n { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--card-ink); color: var(--card); font-weight: 700; font-size: 0.85rem; }
+.ac-label { font-weight: 700; width: 3.2em; }
+.ac-grid { display: grid; grid-template-columns: repeat(4, minmax(3.2em, auto)); gap: 4px; }
+.ac-cell { border: 1px solid var(--card-muted); border-radius: 4px; padding: 2px 4px; text-align: center; font-size: 0.8rem; }
+.ac-arrow { font-weight: 700; }
+.ac-id { font-size: 0.8rem; color: var(--card-muted); }
+.automa-card .egg { width: 16px; }
+
+/* layout */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.main-col { display: grid; gap: 20px; min-width: 0; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.sec-title { font-size: 1.35rem; }
+.sub-title { font-family: var(--font-display); font-size: 1.1rem; margin: 14px 0 6px; }
+.sub-title small { font-family: var(--font-body); font-size: 0.85rem; color: var(--muted); font-weight: 400; margin-left: 6px; }
+
+.supply, .player, .log { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; min-width: 0; }
+.supply-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
+@media (max-width: 720px) { .supply-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sup-col { display: grid; gap: 8px; align-content: start; position: relative; }
+.sup-label { position: absolute; top: -6px; left: -6px; z-index: 1; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--paper); font-weight: 700; font-size: 0.8rem; display: grid; place-items: center; }
+.sup-col .card, .sup-col .card.mini { width: 100%; }
+.sup-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; align-items: flex-start; }
+.discard { padding: 8px 0; }
+.goals { flex: 1 1 320px; background: var(--paper); border-radius: 8px; padding: 10px 12px; }
+.goals h3 { font-size: 1.1rem; margin-bottom: 4px; }
+.goals ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.goals li { display: flex; gap: 8px; align-items: baseline; }
+.goals small { color: var(--muted); }
+.g-n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 0.8rem; display: grid; place-items: center; }
+
+.p-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.p-head h2 { margin-right: 6px; }
+.chip { background: var(--chip); border-radius: 999px; padding: 2px 10px; font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip.now { background: var(--accent); color: var(--accent-ink); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; margin-top: 10px; }
+
+/* cards */
+.card {
+  position: relative; width: 11rem; background: var(--card); color: var(--card-ink);
+  border: 1px solid #8f9a96; border-radius: 9px; padding: 8px; font-size: 0.82rem; line-height: 1.3;
+  box-shadow: 0 2px 0 rgba(0,0,0,.08);
+}
+.card.mini { width: 9rem; font-size: 0.76rem; }
+.c-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; min-height: 26px; }
+.c-cost { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.ico { width: 22px; height: 22px; vertical-align: middle; }
+.ico.sm { width: 18px; height: 18px; }
+.mini .ico { width: 19px; height: 19px; }
+.free { font-weight: 700; color: var(--card-muted); }
+.c-pts { display: flex; flex-direction: column; align-items: center; line-height: 1; border: 2px solid var(--card-ink); border-radius: 50%; width: 32px; height: 32px; justify-content: center; }
+.c-pts b { font-family: var(--font-display); font-size: 1.05rem; }
+.c-pts small { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.c-name { font-family: var(--font-display); font-weight: 700; font-size: 1.02rem; margin-top: 4px; line-height: 1.1; }
+.mini .c-name { font-size: 0.92rem; }
+.c-sci { font-style: italic; color: var(--card-muted); font-size: 0.74rem; }
+.c-art { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 6px; margin: 6px 0 4px; border: 1px solid #c9cfcb; object-fit: cover; }
+.c-stats { display: flex; justify-content: space-between; font-weight: 700; color: var(--card-muted); align-items: center; }
+.c-stats span { display: inline-flex; align-items: center; gap: 2px; }
+.egg { width: 18px; height: auto; vertical-align: middle; }
+.egg.sm { width: 13px; }
+.c-power { margin-top: 6px; border-radius: 6px; padding: 6px 7px; font-weight: 700; }
+.c-power.brown { background: var(--brown); color: #ffffff; }
+.c-power.green { background: var(--green); color: #ffffff; }
+.c-power.none { background: var(--none); color: var(--card-muted); font-weight: 400; }
+.c-power .tag { display: block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; opacity: 0.92; }
+.c-fact { margin-top: 6px; font-style: italic; color: var(--card-muted); font-size: 0.74rem; }
+.c-state { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #b9c1bd; flex-wrap: wrap; gap: 4px; }
+.c-state .eggs { display: flex; gap: 2px; flex-wrap: wrap; }
+.tucked { font-weight: 700; background: #e1d6c6; border-radius: 4px; padding: 1px 6px; }
+.c-back { margin-top: 6px; padding-top: 4px; border-top: 1px solid #c9cfcb; font-weight: 700; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.token { position: absolute; top: -12px; left: 8px; background: var(--sel); color: var(--sel-ink); font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; z-index: 2; }
+.is-token { outline: 3px solid var(--sel); outline-offset: 2px; }
+
+.card.food { width: 7rem; text-align: center; display: grid; gap: 4px; justify-items: center; padding: 10px 6px; }
+.card.food.deck { width: 100%; box-shadow: 3px 3px 0 var(--card), 4px 4px 0 #8f9a96, 6px 6px 0 var(--card), 7px 7px 0 #8f9a96; }
+.f-icons { display: flex; gap: 2px; }
+.f-icons .ico { width: 40px; height: 40px; }
+.f-name { font-family: var(--font-display); font-weight: 700; font-size: 1rem; }
+.f-sub { color: var(--card-muted); font-size: 0.74rem; }
+.card.nest { width: 9rem; background: #efe6d6; display: grid; gap: 6px; align-content: start; }
+.card.nest.mini { width: 8rem; }
+.n-title { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }
+.n-eggs { display: flex; gap: 4px; }
+.n-eggs .egg { width: 24px; }
+.n-sub { font-size: 0.74rem; color: var(--card-muted); }
+.n-stat { font-weight: 700; }
+.empty-slot { display: grid; place-items: center; text-align: center; min-height: 10rem; background: transparent; border: 2px dashed var(--line); color: var(--muted); box-shadow: none; }
+
+/* selectable */
+.selectable { cursor: pointer; outline: 3px dashed var(--sel); outline-offset: 3px; transition: transform .12s ease; }
+.selectable:hover { transform: translateY(-3px); }
+.selectable:focus-visible { outline: 4px solid var(--focus); outline-offset: 3px; }
+.selectable.chosen { outline: 4px solid var(--sel); outline-offset: 3px; transform: translateY(-4px); }
+.pick-badge { position: absolute; bottom: -12px; right: 8px; background: var(--sel); color: var(--sel-ink); font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 999px; }
+.chosen .pick-badge { background: var(--card-ink); color: var(--card); }
+
+/* compact players */
+.player.compact .card.bird.mini .c-fact { display: none; }
+.player.is-automa { border-color: var(--accent); }
+
+/* log */
+.log { position: sticky; top: 140px; max-height: calc(100vh - 160px); overflow-y: auto; }
+@media (max-width: 960px) { .log { position: static; max-height: 320px; } }
+.log ol { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 0.88rem; }
+.log li.flash { font-weight: 700; }
+
+/* results */
+.results { background: var(--surface); border: 2px solid var(--accent); border-radius: var(--r); padding: 16px; margin-bottom: 16px; }
+.results h2 { font-size: 1.8rem; }
+.table-wrap { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; min-width: 320px; font-variant-numeric: tabular-nums; }
+caption { text-align: left; font-weight: 700; padding-bottom: 6px; }
+th, td { padding: 6px 12px; border-bottom: 1px solid var(--line); text-align: right; }
+th[scope="row"], thead th:first-child { text-align: left; }
+tr.total td, tr.total th { font-weight: 700; font-size: 1.1rem; border-top: 2px solid var(--ink); }
+
+/* dialog */
+dialog { border: 2px solid var(--accent); border-radius: var(--r); padding: 0; max-width: min(720px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); }
+dialog::backdrop { background: rgba(10, 20, 22, 0.6); }
+.dlg-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+.dlg-body { padding: 4px 20px 20px; max-width: 70ch; }
+.dlg-body h3 { margin-top: 16px; font-size: 1.2rem; }
+.dlg-body li { margin: 4px 0; }
+
+@media (max-width: 520px) {
+  .card { width: calc(50% - 5px); }
+  .card.mini { width: calc(50% - 5px); }
+  .card.food { width: calc(33% - 7px); }
+  .card.nest, .card.nest.mini { width: calc(50% - 5px); }
+  .prompt { max-height: 50vh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  .selectable:hover, .selectable.chosen { transform: none; }
+}
+
+</style>
+</head>
+<body>
+<!--BODY-START-->
+<a class="skip" href="#prompt">Skip to current action</a>
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><span class="brand-name">Wingspan <em>Pocket</em></span></div>
+  <div class="top-actions">
+    <span id="round" class="round" aria-live="off"></span>
+    <button type="button" id="btn-rules">How to play</button>
+    <button type="button" id="btn-new">New game</button>
+  </div>
+</header>
+<div id="confirm-new" class="confirm" role="alertdialog" aria-labelledby="confirm-text" hidden>
+  <p id="confirm-text">Abandon the current game and start a new one?</p>
+  <button type="button" id="confirm-yes" class="primary">Start a new game</button>
+  <button type="button" id="confirm-no">Keep playing</button>
+</div>
+
+<main>
+  <div id="loading" class="loading"><p id="loading-status" role="status">Painting birds…</p></div>
+
+  <section id="setup" class="setup" hidden aria-labelledby="setup-title">
+    <h1 id="setup-title" tabindex="-1">Wingspan <em>Pocket</em></h1>
+    <p class="lede">Build a flock of six birds from around the world. Each turn, take one Nest action, then activate the brown powers in your Flock from left to right.</p>
+    <form id="setup-form">
+      <fieldset>
+        <legend>Who is playing?</legend>
+        <label class="radio"><input type="radio" name="mode" id="mode-solo" value="solo" checked> Solo against Automa</label>
+        <label class="radio"><input type="radio" name="mode" id="mode-hot" value="hot"> 2 to 4 players sharing this screen</label>
+      </fieldset>
+      <fieldset id="solo-opts">
+        <legend>Solo options</legend>
+        <label for="solo-name">Your name</label>
+        <input id="solo-name" type="text" value="You" autocomplete="nickname">
+        <label for="difficulty">Automa difficulty</label>
+        <select id="difficulty">
+          <option value="easy">Easier (cards 1 to 6)</option>
+          <option value="normal" selected>Normal (cards 1 to 8, one set aside)</option>
+          <option value="hard">Harder (hard cards 1 to 3)</option>
+        </select>
+      </fieldset>
+      <fieldset id="hot-opts" hidden>
+        <legend>Players</legend>
+        <label for="hot-count">Number of players</label>
+        <select id="hot-count"><option>2</option><option>3</option><option>4</option></select>
+        <div class="names">
+          <div id="hot-name-wrap-1"><label for="hot-name-1">Player 1 name</label><input id="hot-name-1" type="text" value="Player 1"></div>
+          <div id="hot-name-wrap-2"><label for="hot-name-2">Player 2 name</label><input id="hot-name-2" type="text" value="Player 2"></div>
+          <div id="hot-name-wrap-3"><label for="hot-name-3">Player 3 name</label><input id="hot-name-3" type="text" value="Player 3"></div>
+          <div id="hot-name-wrap-4"><label for="hot-name-4">Player 4 name</label><input id="hot-name-4" type="text" value="Player 4"></div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Advanced rules</legend>
+        <label class="check"><input type="checkbox" id="opt-goals"> Use goal cards (always on against Automa)</label>
+        <label class="check"><input type="checkbox" id="opt-choose"> Choose which 2 of your 6 starting cards are birds</label>
+      </fieldset>
+      <button type="submit" class="primary big">Start game</button>
+    </form>
+    <p class="fine">Fan-made study project based on the Wingspan Pocket rulebooks. Bird portraits, card stats and text are original; species facts are real. Wingspan is a trademark of Stonemaier Games.</p>
+  </section>
+
+  <div id="game" hidden>
+    <section id="prompt" class="prompt" aria-label="Current action"></section>
+    <section id="results" class="results" hidden aria-labelledby="results-title"></section>
+    <div class="layout">
+      <div class="main-col">
+        <section id="supply" class="supply" aria-label="Supply"></section>
+        <div id="board-me"></div>
+        <div id="board-others"></div>
+      </div>
+      <aside class="log" aria-labelledby="log-title">
+        <h2 id="log-title" class="sec-title">Game log</h2>
+        <ol id="log-list" reversed></ol>
+      </aside>
+    </div>
+  </div>
+  <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+</main>
+
+<dialog id="rules" aria-labelledby="rules-title">
+  <div class="dlg-head"><h2 id="rules-title">How to play</h2><button type="button" id="rules-close">Close</button></div>
+  <div class="dlg-body">
+    <h3>Goal</h3>
+    <p>Score the most points from birds in your Flock, eggs, tucked cards and (advanced) goals. The game ends when a player has 6 birds in their Flock and everyone has had the same number of turns.</p>
+    <h3>Cards</h3>
+    <p>Every card is double-sided: a bird on one side and food on the other. Cards stay the way you gained them. Your Reserve holds both kinds face up.</p>
+    <h3>On your turn</h3>
+    <ol>
+      <li><b>Take one Nest action.</b>
+        <ul>
+          <li><b>Play a bird:</b> pay its food by discarding food cards (any 2 food cards can stand in for 1 food) and pay any egg cost from your Nest or birds. The bird joins the right end of your Flock.</li>
+          <li><b>Draw 2 cards:</b> take face-up birds from the supply and/or top cards of the food decks, in any mix. If 3 or more food decks show exactly the same food, you may discard those top cards first.</li>
+          <li><b>Lay up to 3 eggs:</b> each on a different card with room. The Nest holds 3; each bird holds up to its egg limit.</li>
+        </ul></li>
+      <li><b>Activate brown powers</b> from left to right. Every power is optional, including on the bird you just played. Green powers are ongoing.</li>
+      <li><b>Refill</b> empty bird slots from the food deck beside them.</li>
+    </ol>
+    <h3>Powers</h3>
+    <ul>
+      <li><b>Arrow powers</b> (“… to …”): pay the first part to gain the second.</li>
+      <li><b>Hunt:</b> reveal the bird on the back of a food deck's top card. Under the listed wingspan, tuck it; otherwise discard it.</li>
+      <li><b>Tuck:</b> slide a card from your Reserve behind the bird. Each tucked card scores 1 point.</li>
+      <li><b>All players:</b> everyone draws the top card of the food deck you choose. Against Automa, she tucks a card from the discard pile instead.</li>
+    </ul>
+    <h3>Scoring</h3>
+    <p>Bird points + 1 per egg + 1 per tucked card + 1 per egg on birds matching each goal. Ties go to the player with more cards in their Reserve.</p>
+    <h3>Automa</h3>
+    <p>Each Automa turn reveals a card: she gains food cards and tucks supply birds under her Nest, plays a bird when she has enough food cards (returning 1 egg), then lays eggs from right to left. She scores 3 per bird, 3 per Nest egg, 1 per egg on birds, 1 per tucked card, plus goals.</p>
+    <h3>Keyboard</h3>
+    <p>Use Tab to move between buttons and selectable cards, and Enter or Space to choose. The current instruction is always at the top of the page.</p>
+  </div>
+</dialog>
+<!--BODY-END-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script>
+/* Wingspan Pocket (fan-made digital edition) — card data
+ * The bird roster uses real species and approximate real-world wingspans.
+ * Costs, points, egg limits, powers, flavor text and all artwork are original
+ * to this project; they are not copied from the published game cards.
+ *
+ * Food letters: I invertebrate, S seed, F fish, R fruit, M rodent, W any food, E egg
+ *
+ * Power syntax
+ *   "lay"                       single benefit
+ *   "a>b+c"                     arrow: pay a, then gain b and c
+ *   "a&b"                       two separate benefits, use either or both
+ *   steps: draw:any | draw:bird | draw:bird:X | draw:food:X | tuck:bird | tuck:food:X
+ *          hunt:N | lay | degg | dcard:any | dcard:food:X | dcard:bird | alldraw | copy
+ *   green: g:ignore:X | g:wild:X | g:powany:X | g:copy
+ *
+ * Art: "type beak tail | body wing head belly beak legs | mark:color mark:color"
+ */
+
+const FOOD = {
+  I: { name: 'invertebrate', plural: 'invertebrates' },
+  S: { name: 'seed', plural: 'seeds' },
+  F: { name: 'fish', plural: 'fish' },
+  R: { name: 'fruit', plural: 'fruit' },
+  M: { name: 'rodent', plural: 'rodents' },
+  W: { name: 'any food', plural: 'any food' },
+};
+const FOOD_TYPES = ['I', 'S', 'F', 'R', 'M'];
+
+const BIRD_ROWS = [
+  ['American Robin', 'Turdus migratorius', 38, 'I R', 3, 3, 'lay', 'Often the first bird singing at dawn in spring.', 'perch short long | #6b6560 #55504c #2f2c2b #c9622f #e3b23c #6b4a3a | eyering:#f4f1ea'],
+  ['Northern Cardinal', 'Cardinalis cardinalis', 30, 'S R', 4, 3, 'draw:food:S', 'Both sexes sing, and pairs sometimes trade song phrases.', 'perch cone long | #c41e2a #a3182a #c41e2a #d1323b #e8743b #7a5a4a | face:#141414 crest:#c41e2a'],
+  ['Blue Jay', 'Cyanocitta cristata', 40, 'S I', 3, 2, 'draw:bird:S', 'Caches thousands of acorns each fall, helping oak forests spread.', 'perch short long | #4a7fc1 #3a6cb0 #5a8ed0 #e8ecef #222222 #333333 | collar:#1a1a1a crest:#5a8ed0 stripes:#f2f2f2'],
+  ['Atlantic Puffin', 'Fratercula arctica', 53, 'F F', 4, 1, 'draw:food:F', 'Can carry a dozen small fish crosswise in its bill.', 'upright big short | #1b1b1f #1b1b1f #1b1b1f #f4f4f2 #e8572a #f08a3a | face:#ecebe6'],
+  ['Barn Owl', 'Tyto alba', 107, 'M M', 5, 2, 'hunt:50', 'Its heart-shaped face funnels sound toward its ears.', 'owl hook short | #d9a65a #c8954e #f1e6d6 #f6efe4 #e7d8c4 #c9b9a8 | disc:#fbf6ee eyes:#1a1a1a'],
+  ['Bald Eagle', 'Haliaeetus leucocephalus', 203, 'F F M', 6, 1, 'hunt:75', 'Pairs add to the same nest for years until it weighs as much as a car.', 'raptor hook short | #4a3426 #3d2a1f #f5f3ee #4a3426 #f2c230 #f2c230 | tailc:#f5f3ee'],
+  ['Secretarybird', 'Sagittarius serpentarius', 203, 'M I E', 7, 1, 'hunt:40', 'Hunts on foot across grassland, striking prey with quick kicks.', 'wader hook long | #b9bec4 #2a2a2e #c3c8cd #c3c8cd #9aa0a6 #f0d9c8 | face:#f08a3a crest:#222222'],
+  ['Splendid Fairywren', 'Malurus splendens', 15, 'I', 2, 3, 'draw:bird:I', 'Older offspring often stay to help raise the next brood.', 'perch short long | #2b6fd6 #1d4fa8 #3fa2ef #2b6fd6 #1a1a1a #6b5a4a | collar:#0d1a3a'],
+  ['Green-backed Camaroptera', 'Camaroptera brachyura', 15, 'I', 2, 2, 'tuck:food:I', 'Stitches living leaves into a pocket that holds its nest.', 'perch short short | #8c939a #6f9a3e #8c939a #d9dcdf #2a2a2a #c9a58a |'],
+  ['Wild Turkey', 'Meleagris gallopavo', 135, 'S R W', 4, 4, 'g:wild:S', 'Roosts high in trees at night despite its heavy body.', 'ground short fan | #4a3a2e #6b4f3a #8fb3d9 #3d2f26 #c9b48a #c86a5a | wattle:#c8232c tailc:#6b4f3a'],
+  ['Black Kite', 'Milvus migrans', 137, 'M W', 3, 2, 'g:ignore:M', 'Gathers at grass fires to catch animals fleeing the flames.', 'raptor hook fork | #6b4a33 #4f3624 #9b8a7a #7a573d #f2c230 #f2c230 |'],
+  ['American White Pelican', 'Pelecanus erythrorhynchos', 274, 'F F F', 5, 1, 'g:wild:F', 'Groups swim in a line to drive fish into the shallows.', 'duck pouch short | #f5f5f2 #f0f0ec #f5f5f2 #ffffff #f29a3a #f29a3a | tip:#1b1b1b'],
+  ['Scissor-tailed Flycatcher', 'Tyrannus forficatus', 38, 'I I', 5, 2, 'alldraw', 'Its long forked tail helps it turn sharply after insects.', 'perch short fork | #c9cdd1 #4a4d52 #d9dcdf #f2c9b8 #222222 #333333 | side:#f08a8a'],
+  ['American Redstart', 'Setophaga ruticilla', 20, 'I', 2, 2, 'draw:food:I', 'Flashes orange tail patches to startle insects into flight.', 'perch short long | #1a1a1a #1a1a1a #1a1a1a #f2f2ef #222222 #333333 | patch:#f07a1a side:#f07a1a'],
+  ['Common Raven', 'Corvus corax', 116, 'W W', 3, 2, 'dcard:any>draw:any+draw:any', 'Solves multi-step puzzles and remembers faces for years.', 'perch heavy long | #15151a #1c1c24 #15151a #15151a #111111 #222222 |'],
+  ['Peregrine Falcon', 'Falco peregrinus', 100, 'M M E', 6, 1, 'hunt:60', 'Reaches extreme speeds in its hunting dive.', 'raptor hook short | #5b6875 #44505c #2a2f36 #efe9df #f2c230 #f2c230 | face:#2a2f36 speckle:#5b6875'],
+  ['Great Blue Heron', 'Ardea herodias', 180, 'F F', 4, 2, 'tuck:food:F', 'Stands motionless in shallow water before a lightning strike.', 'wader dagger short | #7d93a8 #6a8199 #f1f1ee #9fb0c0 #e0b23a #6b6050 | crest:#1d1d22 neck:#9fb0c0'],
+  ['Emperor Penguin', 'Aptenodytes forsteri', 76, 'F F E', 8, 1, '', 'Males balance one egg on their feet through the Antarctic winter.', 'upright short short | #1d2430 #1d2430 #111418 #f5f3ea #1a1a1a #2a2a2a | cheek:#f6b73c'],
+  ['Laughing Kookaburra', 'Dacelo novaeguineae', 65, 'I M', 4, 2, 'hunt:30', 'Family groups call together at dawn and dusk to mark territory.', 'perch heavy short | #e9e1d0 #6b4f3a #e9e1d0 #f1ebdf #3a3a3a #8a8a8a | face:#5a4030 patch:#5d8cc6'],
+  ['Rainbow Lorikeet', 'Trichoglossus moluccanus', 46, 'R S', 3, 2, 'g:powany:R', 'A brush-tipped tongue lets it lap up nectar and pollen.', 'parrot hook long | #3aa13f #2f8a36 #2b4fb8 #f0821f #e2402e #808080 | collar:#b6e04a'],
+  ['Superb Lyrebird', 'Menura novaehollandiae', 76, 'I I E', 6, 1, 'copy', 'Mimics other birds and even camera shutters in its song.', 'ground short lyre | #6b5a4b #5a4a3e #6b5a4b #7a6a5a #2a2a2a #3a3a3a | tailc:#8a7462'],
+  ['Shoebill', 'Balaeniceps rex', 240, 'F F E', 8, 1, '', 'Waits motionless for long stretches for lungfish to surface.', 'wader shoe short | #8e9aa6 #7a8794 #9aa6b2 #a8b3be #c9b48a #4a4a4a | neck:#8e9aa6'],
+  ['Resplendent Quetzal', 'Pharomachrus mocinno', 50, 'R R', 4, 2, 'draw:food:R', 'Swallows small wild avocados whole and later brings up the pit.', 'perch short streamers | #2aa15a #1f8a4a #34b067 #d2232a #e8c13a #444444 | crest:#34b067'],
+  ['Keel-billed Toucan', 'Ramphastos sulfuratus', 110, 'R R I', 5, 2, 'tuck:food:R', 'Its huge bill is light and helps it shed body heat.', 'perch toucan short | #141414 #141414 #141414 #f3d23a #8ccf4d #3a6fd0 | tip:#e8572a throat:#f3d23a'],
+  ['Ruby-throated Hummingbird', 'Archilochus colubris', 10, 'R', 2, 2, 'draw:any', 'Some cross the Gulf of Mexico without stopping on migration.', 'hummer needle short | #3f9b5a #5d6f66 #3f9b5a #e8ece6 #1a1a1a #333333 | throat:#c8102e'],
+  ['House Sparrow', 'Passer domesticus', 23, 'S', 1, 4, 'lay', 'Has lived alongside people for thousands of years.', 'perch cone short | #8a6a4a #7a5236 #8a8f94 #cfc8bc #3a3a3a #b08a6a | throat:#1a1a1a cheek:#e8e2d6 stripes:#efe8dc'],
+  ['European Starling', 'Sturnus vulgaris', 37, 'I', 1, 3, 'draw:bird', 'Huge flocks move as one in swirling murmurations.', 'perch long short | #1f2a2e #233038 #2a3a3a #2a3a33 #e8c13a #c9806a | speckle:#e8e2c8'],
+  ['Mallard', 'Anas platyrhynchos', 89, 'S W', 3, 4, 'lay', 'Feeds by tipping forward to reach plants underwater.', 'duck flat short | #b8b0a6 #7a6a5a #1f7a4a #8a5a3a #e8c13a #f08a2a | collar:#ffffff patch:#3a4fb8'],
+  ['Common Loon', 'Gavia immer', 122, 'F F', 4, 2, 'draw:bird:F', 'Dense bones help it dive deep after fish.', 'duck dagger short | #1a1d1f #1f2326 #1a3a32 #f2f2f0 #1a1a1a #2a2a2a | speckle:#ffffff collar:#e8e8e8'],
+  ['Osprey', 'Pandion haliaetus', 160, 'F F', 4, 2, 'g:ignore:F', 'Turns fish headfirst in its talons to cut down on drag.', 'raptor hook short | #4a3a2e #3d2f26 #f5f3ee #f5f3ee #222222 #b8c8d0 | face:#3a2f26'],
+  ['Great Horned Owl', 'Bubo virginianus', 120, 'M M M', 7, 1, 'hunt:80', 'Starts nesting in winter, sometimes incubating through snow.', 'owl hook short | #8a6a4a #6b5038 #8a6a4a #c9b49a #2a2a2a #c9b49a | disc:#c8955a eyes:#f2b21a crest:#6b5038 speckle:#4a3828'],
+  ['Snowy Owl', 'Bubo scandiacus', 140, 'M M E', 7, 2, 'hunt:40', 'Lays more eggs in years when lemmings are plentiful.', 'owl hook short | #f3f3f0 #ecebe6 #f6f6f3 #f6f6f3 #2a2a2a #ececec | speckle:#3a3a3a eyes:#f2c21a disc:#f8f8f5'],
+  ['Burrowing Owl', 'Athene cunicularia', 55, 'I M', 3, 3, 'tuck:food:M', 'Nests underground, often in burrows dug by other animals.', 'owl hook short | #8a6a4a #7a5a3a #8a6a4a #e8dcc6 #c9c09a #c9c09a | speckle:#f2ead8 eyes:#f2c21a disc:#a08060 legs:long'],
+  ['Red-tailed Hawk', 'Buteo jamaicensis', 125, 'M W', 4, 2, 'hunt:50', 'Its raspy scream is often dubbed in for other raptors in films.', 'raptor hook short | #6b4a33 #5a3d29 #6b4a33 #efe5d6 #3a3a3a #f2c230 | tailc:#c2552e'],
+  ['American Kestrel', 'Falco sparverius', 56, 'I M', 3, 2, 'draw:food:M', 'Hovers in place while scanning fields below.', 'raptor hook long | #c9673a #7d8fb8 #8fa3c9 #f1e2cf #3a3a5a #f2c230 | face:#1a1a1a speckle:#3a2a1a'],
+  ['Mourning Dove', 'Zenaida macroura', 45, 'S', 2, 3, 'lay', 'Its wings make a soft whistle when it takes off.', 'perch short long | #b8a08a #a8907a #b8a08a #d8c4b0 #2a2a2a #c86a6a | speckle:#2a2a2a'],
+  ['Black-capped Chickadee', 'Poecile atricapillus', 20, 'S I', 3, 3, 'tuck:food:S', 'Hides seeds in many spots and remembers where they are.', 'perch short long | #8a9298 #6f777d #f5f5f2 #efe6d6 #1a1a1a #3a3a3a | cap:#141414 throat:#141414'],
+  ['Cedar Waxwing', 'Bombycilla cedrorum', 28, 'R', 2, 2, 'tuck:food:R', 'Flock members sometimes pass berries from beak to beak.', 'perch short short | #b8956a #8a8070 #b8956a #e8d9a0 #1a1a1a #3a3a3a | face:#141414 tip:#f2d23a crest:#b8956a'],
+  ['Acorn Woodpecker', 'Melanerpes formicivorus', 40, 'S S', 4, 2, 'tuck:food:S', 'Groups store thousands of acorns in holes drilled into one tree.', 'perch dagger short | #1a1a1a #1a1a1a #f2f2ee #f2f2ee #3a3a3a #555555 | cap:#d2232a face:#1a1a1a'],
+  ['Pileated Woodpecker', 'Dryocopus pileatus', 74, 'I I', 4, 2, 'draw:food:I', 'Chisels large rectangular holes while hunting carpenter ants.', 'perch dagger short | #1a1a1a #1a1a1a #f2f2ee #1a1a1a #6a6a6a #555555 | crest:#d2232a face:#1a1a1a'],
+  ['Barn Swallow', 'Hirundo rustica', 33, 'I', 2, 3, 'degg>draw:any+draw:any', 'Builds cup nests from mud pellets under eaves and bridges.', 'perch short fork | #1f3a6b #1a2f55 #1f3a6b #e8b88a #1a1a1a #333333 | throat:#b84a2a'],
+  ['Chimney Swift', 'Chaetura pelagica', 30, 'I', 2, 2, 'draw:any', 'Spends nearly all of its daylight hours on the wing.', 'soar short short | #4a4542 #3d3936 #4a4542 #5a5552 #1a1a1a #333333 |'],
+  ['Killdeer', 'Charadrius vociferus', 48, 'I', 2, 3, 'dcard:any>lay', 'Fakes a broken wing to lead predators away from its nest.', 'shore short long | #8a6a4a #7a5a3a #8a6a4a #f5f3ee #1a1a1a #c9b9a0 | collar:#141414 eyering:#d2532a'],
+  ['American Flamingo', 'Phoenicopterus ruber', 150, 'I S W', 5, 1, 'g:ignore:I', 'Its color comes from pigments in the shrimp and algae it eats.', 'wader bent short | #f07a7a #e8605a #f28a80 #f59a90 #1a1a1a #e8707a | tip:#1a1a1a neck:#f28a80'],
+  ['Wood Duck', 'Aix sponsa', 70, 'S R', 4, 3, 'draw:bird:R', 'Ducklings leap from tree-cavity nests a day after hatching.', 'duck flat short | #6b4a3a #2a3a5a #1f6a4a #8a3a2a #d2232a #f08a2a | face:#ffffff collar:#ffffff crest:#1f6a4a'],
+  ['Canada Goose', 'Branta canadensis', 160, 'S S W', 5, 3, 'g:ignore:S', 'Flies in V formations that save energy for the whole flock.', 'goose flat short | #8a7a6a #6b5d50 #141414 #d9d0c4 #141414 #2a2a2a | cheek:#ffffff neck:#141414'],
+  ['Sandhill Crane', 'Antigone canadensis', 190, 'S I E', 6, 1, 'alldraw', 'Pairs perform leaping, bowing dances.', 'wader dagger short | #9aa0a6 #8a9096 #a8aeb4 #b4bac0 #3a3a3a #3a3a3a | cap:#d2232a neck:#a8aeb4'],
+  ['Roseate Spoonbill', 'Platalea ajaja', 127, 'F I', 4, 2, 'tuck:food:I', 'Sweeps its flat bill side to side to feel for prey.', 'wader spoon short | #f29ab0 #e8708a #f5f3ee #f5b0c0 #9aa08a #c86a6a | neck:#f5e0e6'],
+  ['Anhinga', 'Anhinga anhinga', 114, 'F F', 4, 2, 'dcard:food:F>lay+lay', 'Spears fish underwater, then dries its wings in the sun.', 'goose dagger long | #141414 #2a2a2a #141414 #141414 #e8c13a #3a3a3a | speckle:#f2f2ee neck:#141414'],
+  ['Common Kingfisher', 'Alcedo atthis', 25, 'F', 2, 2, 'draw:food:F', 'Dives from a perch, correcting for how water bends light.', 'perch dagger short | #1f8ab8 #1a74a8 #1f8ab8 #f08a3a #1a1a1a #f05a3a | cheek:#f08a3a throat:#ffffff'],
+  ['Grey Crowned Crane', 'Balearica regulorum', 200, 'S I', 4, 1, 'g:copy', 'A crown of stiff golden feathers stands out on the savanna.', 'wader short short | #6f767d #5f666d #141414 #6f767d #2a2a2a #2a2a2a | crown:#e8c13a cheek:#ffffff wattle:#d2232a neck:#6f767d'],
+  ['Hoopoe', 'Upupa epops', 45, 'I', 2, 2, 'tuck:food:I', 'Raises a fan-shaped crest when alarmed or landing.', 'perch curve short | #e09a6a #2a2a2a #e09a6a #f0b08a #2a2a2a #555555 | crest:#e09a6a stripes:#f5f3ee'],
+  ['Eurasian Magpie', 'Pica pica', 56, 'W', 2, 2, 'draw:any', 'Recognizes itself in a mirror, a rare ability among animals.', 'perch heavy long | #141414 #1a2a4a #141414 #f5f5f2 #141414 #222222 | patch:#f5f5f2'],
+  ['Blue-footed Booby', 'Sula nebouxii', 150, 'F F', 4, 2, 'g:powany:F', 'Males show off their bright feet during courtship.', 'shore dagger short | #8a7a6a #6b5d50 #f2ebe0 #f5f5f2 #6b8aa8 #4ab0d8 | speckle:#f2ebe0'],
+  ['Hyacinth Macaw', 'Anodorhynchus hyacinthinus', 120, 'S S R', 5, 1, 'g:wild:R', 'Cracks very hard palm nuts with its powerful beak.', 'parrot hook long | #2b3fa8 #23339a #2b3fa8 #2b3fa8 #1a1a1a #2a2a2a | eyering:#f2d23a'],
+  ['Tawny Frogmouth', 'Podargus strigoides', 70, 'I M', 3, 2, 'g:powany:M', 'Freezes and looks like a broken branch when threatened.', 'owl wide short | #8a8076 #7a7066 #8a8076 #a89e94 #6a6058 #6a6058 | speckle:#4a4038 eyes:#f2b21a'],
+  ['Little Penguin', 'Eudyptula minor', 30, 'F', 2, 2, 'lay', 'The smallest penguin returns to land only after dark.', 'upright short short | #3a5f8a #3a5f8a #3a5f8a #f5f5f2 #1a1a1a #f2d0c8 |'],
+  ['Arctic Tern', 'Sterna paradisaea', 80, 'F I', 4, 2, 'draw:any', 'Sees two summers each year on its pole-to-pole migration.', 'soar dagger fork | #e8ecef #c9d2d9 #f5f5f2 #f5f5f2 #d2232a #d2232a | cap:#141414'],
+  ['Andean Condor', 'Vultur gryphus', 320, 'M M W E', 9, 1, '', 'Soars for hours on rising air with barely a wingbeat.', 'soar hook short | #141414 #1a1a1a #c86a5a #141414 #c9b48a #555555 | collar:#f5f5f2 patch:#f5f5f2'],
+  ['Common Ostrich', 'Struthio camelus', 200, 'S S I E', 8, 2, '', 'Lays the largest eggs of any living bird.', 'ratite short short | #141414 #1a1a1a #d9b8a8 #f5f5f2 #d9b8a8 #e0a8a0 | neck:#d9b8a8 tailc:#f5f5f2'],
+  ['Turkey Vulture', 'Cathartes aura', 170, 'M W', 3, 1, 'draw:bird:M', 'Finds food by smell, a rare skill among birds.', 'raptor hook short | #2a2420 #3a3430 #c8323a #2a2420 #f2ebe0 #c9a8a0 |'],
+  ['Northern Mockingbird', 'Mimus polyglottos', 35, 'I R', 3, 2, 'copy', 'Keeps learning new songs throughout its life.', 'perch short long | #8a8f94 #5a5f64 #8a8f94 #e8e8e4 #1a1a1a #333333 | patch:#f5f5f2'],
+  ['Eastern Bluebird', 'Sialia sialis', 31, 'I R', 3, 3, 'tuck:bird&draw:any', 'Nest boxes helped this bird recover from steep declines.', 'perch short short | #3a6fd0 #2f5fc0 #3a6fd0 #d2783a #1a1a1a #333333 |'],
+  ['Cliff Swallow', 'Petrochelidon pyrrhonota', 30, 'I', 2, 3, 'tuck:bird', 'Colonies plaster hundreds of gourd-shaped mud nests to cliffs.', 'perch short short | #2a3a5a #1f2f4a #2a3a5a #f0e8dc #1a1a1a #333333 | throat:#8a3a2a cap:#e8d9b8'],
+  ['Indian Peafowl', 'Pavo cristatus', 140, 'S R W', 5, 2, 'dcard:bird>lay+lay', 'Its shimmering train regrows each year after molting.', 'ground short train | #1f5fb0 #6a7a5a #1f5fb0 #1f5fb0 #8a8a8a #8a8a8a | crest:#1f5fb0 tailc:#2f7a4a'],
+  ['Kea', 'Nestor notabilis', 90, 'W R', 3, 2, 'copy', 'This mountain parrot is famously curious about cars and backpacks.', 'parrot hook long | #6b7a3a #5a6a30 #6b7a3a #6b7a3a #3a3a3a #555555 | patch:#e8572a'],
+];
+
+function parseSteps(s) { return s.split('+').map(parseStep); }
+function parseStep(s) {
+  const p = s.split(':');
+  switch (p[0]) {
+    case 'draw': return { t: 'draw', what: p[1], food: p[2] || null };
+    case 'tuck': return { t: 'tuck', what: p[1], food: p[2] || null };
+    case 'hunt': return { t: 'hunt', max: +p[1] };
+    case 'dcard': return { t: 'dcard', what: p[1], food: p[2] || null };
+    default: return { t: p[0] }; // lay, degg, alldraw, copy
+  }
+}
+function parsePower(s) {
+  if (!s) return null;
+  if (s.startsWith('g:')) {
+    const p = s.split(':');
+    return { green: true, t: p[1], food: p[2] || null };
+  }
+  if (s.includes('>')) {
+    const [c, g] = s.split('>');
+    return { green: false, cost: parseSteps(c), gain: parseSteps(g) };
+  }
+  if (s.includes('&')) return { green: false, cost: [], gain: s.split('&').map(parseStep), either: true };
+  return { green: false, cost: [], gain: parseSteps(s) };
+}
+function parseArt(s) {
+  const [a, c, m] = s.split('|').map(x => x.trim());
+  const [type, beak, tail] = a.split(/\s+/);
+  const [body, wing, head, belly, bill, legs] = c.split(/\s+/);
+  const marks = {};
+  (m || '').split(/\s+/).filter(Boolean).forEach(kv => { const i = kv.indexOf(':'); marks[kv.slice(0, i)] = kv.slice(i + 1); });
+  return { type, beak, tail, body, wing, head, belly, bill, legs, marks };
+}
+
+const BIRDS = BIRD_ROWS.map((r, i) => {
+  const cost = r[3].split(/\s+/).filter(Boolean);
+  return {
+    id: i,
+    name: r[0], sci: r[1], wingspan: r[2],
+    food: cost.filter(x => x !== 'E'),
+    eggCost: cost.filter(x => x === 'E').length,
+    points: r[4], eggLimit: r[5],
+    powerCode: r[6], power: parsePower(r[6]),
+    fact: r[7], art: parseArt(r[8]),
+  };
+});
+
+/* Each physical card: bird on one side, food on the other. */
+const CARDS = BIRDS.map((b, i) => {
+  const f1 = FOOD_TYPES[(i * 3 + 1) % 5];
+  const food = (i % 6 === 5) ? [f1, FOOD_TYPES[(i * 3 + 3) % 5]] : [f1];
+  return { id: i, bird: b, food };
+});
+
+function canTuck(b) { const p = b.power; return !!(p && !p.green && [...p.cost, ...p.gain].some(s => s.t === 'tuck' || s.t === 'hunt')); }
+function hasFood(b, f) { return b.food.includes(f); }
+
+/* Goal cards: double-sided. test(slot, flock, index, isAutoma) -> bool */
+const GOALS = [
+  { automa: true, sides: [
+    { text: 'at least 1 card tucked behind it', test: (s, fl, i, auto) => auto ? canTuck(s.card.bird) : s.tucked.length > 0, stat: canTuck, statNote: 'can tuck' },
+    { text: 'an egg in its cost', test: s => s.card.bird.eggCost > 0, stat: b => b.eggCost > 0 } ] },
+  { automa: true, sides: [
+    { text: 'a value of 3 or fewer points', test: s => s.card.bird.points <= 3, stat: b => b.points <= 3 },
+    { text: 'a value of 6 or more points', test: s => s.card.bird.points >= 6, stat: b => b.points >= 6 } ] },
+  { automa: false, sides: [
+    { text: 'more points than every bird to its left', test: (s, fl, i) => fl.slice(0, i).every(o => o.card.bird.points < s.card.bird.points) },
+    { text: 'a larger wingspan than every bird to its left', test: (s, fl, i) => fl.slice(0, i).every(o => o.card.bird.wingspan < s.card.bird.wingspan) } ] },
+  { automa: false, sides: [
+    { text: 'room for more eggs (not full)', test: s => s.eggs < s.card.bird.eggLimit },
+    { text: 'an egg limit of exactly 1', test: s => s.card.bird.eggLimit === 1, stat: b => b.eggLimit === 1 } ] },
+  { automa: true, sides: [
+    { text: 'an egg limit of 3 or more', test: s => s.card.bird.eggLimit >= 3, stat: b => b.eggLimit >= 3 },
+    { text: 'a green (ongoing) power', test: s => !!(s.card.bird.power && s.card.bird.power.green), stat: b => !!(b.power && b.power.green) } ] },
+  { automa: true, sides: [
+    { text: 'invertebrate in its cost', food: 'I', test: s => hasFood(s.card.bird, 'I'), stat: b => hasFood(b, 'I') },
+    { text: 'seed in its cost', food: 'S', test: s => hasFood(s.card.bird, 'S'), stat: b => hasFood(b, 'S') } ] },
+  { automa: true, sides: [
+    { text: 'fish in its cost', food: 'F', test: s => hasFood(s.card.bird, 'F'), stat: b => hasFood(b, 'F') },
+    { text: 'rodent in its cost', food: 'M', test: s => hasFood(s.card.bird, 'M'), stat: b => hasFood(b, 'M') } ] },
+  { automa: true, sides: [
+    { text: 'fruit in its cost', food: 'R', test: s => hasFood(s.card.bird, 'R'), stat: b => hasFood(b, 'R') },
+    { text: 'a wingspan of 100 cm or more', test: s => s.card.bird.wingspan >= 100, stat: b => b.wingspan >= 100 } ] },
+  { automa: true, sides: [
+    { text: 'a wingspan under 40 cm', test: s => s.card.bird.wingspan < 40, stat: b => b.wingspan < 40 },
+    { text: '3 or more food in its cost', test: s => s.card.bird.food.length >= 3, stat: b => b.food.length >= 3 } ] },
+];
+GOALS.forEach(g => g.sides.forEach(s => {
+  if (s.stat) s.pct = Math.round(100 * BIRDS.filter(s.stat).length / BIRDS.length);
+}));
+
+/* Automa cards (original designs following the rulebook's structure).
+ * food: food-deck positions (0-3) she draws from; tuck: bird-supply positions she tucks.
+ * cost: food cards needed to play a bird; sel: 'goal' or a supply position (0-3);
+ * arrow: tiebreak direction for goal-based picks; eggs: eggs laid in phase 3. */
+const AUTOMA_CARDS = [
+  { id: '1', food: [0], tuck: [], cost: 3, sel: 'goal', arrow: 'ltr', eggs: 1 },
+  { id: '2', food: [1, 3], tuck: [], cost: 4, sel: 1, arrow: 'ltr', eggs: 0 },
+  { id: '3', food: [2], tuck: [2], cost: 4, sel: 'goal', arrow: 'rtl', eggs: 1 },
+  { id: '4', food: [3], tuck: [0], cost: 3, sel: 3, arrow: 'rtl', eggs: 1 },
+  { id: '5', food: [0, 2], tuck: [], cost: 5, sel: 'goal', arrow: 'ltr', eggs: 0 },
+  { id: '6', food: [1], tuck: [3], cost: 3, sel: 0, arrow: 'ltr', eggs: 1 },
+  { id: '7', food: [3, 1], tuck: [1], cost: 4, sel: 'goal', arrow: 'rtl', eggs: 1 },
+  { id: '8', food: [2, 0], tuck: [], cost: 4, sel: 2, arrow: 'ltr', eggs: 1 },
+];
+const AUTOMA_HARD = [
+  { id: '1 HARD', food: [0, 1], tuck: [2], cost: 4, sel: 'goal', arrow: 'ltr', eggs: 1 },
+  { id: '2 HARD', food: [2, 3], tuck: [0], cost: 4, sel: 'goal', arrow: 'rtl', eggs: 1 },
+  { id: '3 HARD', food: [1], tuck: [1, 3], cost: 3, sel: 1, arrow: 'ltr', eggs: 1 },
+];
+
+</script>
+<script>
+/* Wingspan Pocket — rules engine.
+ * The engine is async: whenever a player must decide something it awaits
+ * UI.ask(spec), which resolves with { id } for a button or { key } for a
+ * board element (see keys below). Board keys:
+ *   slot:i  deck:i  res:p:i  nest:p  bird:p:i
+ */
+
+let G = null;
+
+const NEST_LIMIT = 3;
+const rnd = n => Math.floor(Math.random() * n);
+function shuffleArr(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const foodName = f => FOOD[f].name;
+const foodList = arr => arr.map(foodName).join(', ');
+
+function glog(msg, cls) { G.log.push({ msg, cls, turn: G.round }); UI.announce(msg); }
+function flash(msg) { G.flash = msg; glog(msg, 'flash'); }
+
+/* ---------- setup ---------- */
+function newGame(opts) {
+  const deck = shuffleArr(CARDS.map(c => ({ ...c })));
+  G = {
+    opts, players: [], decks: [[], [], [], []], slots: [null, null, null, null], discard: [],
+    goals: [], cur: 0, first: 0, round: 1, endTriggered: false, over: false,
+    log: [], flash: '', token: { p: -1, i: -1 }, copiedGreen: {}, automaCard: null, automaLog: [],
+  };
+  opts.players.forEach((name, i) => G.players.push({ id: i, name, automa: false, nestEggs: 1, flock: [], reserve: [], hand: deck.splice(0, 6), turns: 0 }));
+  if (opts.automa) {
+    G.players.push({ id: G.players.length, name: 'Automa', automa: true, nestEggs: 1, flock: [], reserve: [], tucked: [], turns: 0 });
+    let set = AUTOMA_CARDS.slice();
+    if (opts.difficulty === 'easy') set = set.filter(c => +c.id <= 6);
+    if (opts.difficulty === 'hard') set = set.map(c => AUTOMA_HARD.find(h => h.id === c.id + ' HARD') || c);
+    G.automaSet = set;
+    G.automaDeck = [];
+    automaReshuffle();
+  }
+  deck.forEach((c, i) => G.decks[i % 4].push(c));
+  for (let i = 0; i < 4; i++) G.slots[i] = G.decks[i].pop();
+  if (opts.goals || opts.automa) {
+    const pool = shuffleArr(GOALS.filter(g => opts.automa ? g.automa : true).slice()).slice(0, 2);
+    G.goals = pool.map(g => g.sides[rnd(2)]);
+  }
+  G.first = rnd(G.players.length);
+  G.cur = G.first;
+  return G;
+}
+
+async function startGame() {
+  for (const p of G.players) {
+    if (p.automa) continue;
+    let birdIdx = [0, 1];
+    if (G.opts.chooseStart) {
+      UI.render();
+      const r = await UI.ask({ player: p.id, title: `${p.name}: choose your starting birds`,
+        prompt: 'Pick exactly 2 of your 6 cards to keep bird-side up. The other 4 become food.',
+        startHand: p.id, multi: { keys: p.hand.map((c, i) => `hand:${p.id}:${i}`), min: 2, max: 2, preselect: ['hand:' + p.id + ':0', 'hand:' + p.id + ':1'] },
+        buttons: [{ id: 'ok', label: 'Keep these birds', primary: true, needsValid: true }] });
+      birdIdx = r.selected.map(k => +k.split(':')[2]);
+    }
+    p.reserve = p.hand.map((card, i) => ({ card, side: birdIdx.includes(i) ? 'bird' : 'food' }));
+    delete p.hand;
+  }
+  glog(`${G.players[G.first].name} takes the first turn.`);
+  while (!G.over) {
+    const p = G.players[G.cur];
+    G.flash = '';
+    if (p.automa) await automaTurn(p); else await humanTurn(p);
+    endOfTurn(p);
+  }
+  UI.render();
+  UI.showResults(scoreAll());
+}
+
+/* ---------- supply ---------- */
+function ensureDeck(i) {
+  if (G.decks[i].length > 0) return;
+  if (G.discard.length > 0) {
+    const n = Math.ceil(G.discard.length / 2);
+    G.decks[i] = shuffleArr(G.discard.splice(0, n));
+    glog(`Food deck ${i + 1} ran out and was rebuilt from the bottom half of the discard pile.`);
+    return;
+  }
+  let big = -1;
+  G.decks.forEach((d, j) => { if (j !== i && (big < 0 || d.length > G.decks[big].length)) big = j; });
+  if (big < 0 || G.decks[big].length <= 2) {
+    if (!G.endTriggered) { G.endTriggered = true; glog('The food decks are exhausted. The game will end after this round.', 'flash'); }
+    return;
+  }
+  const n = Math.floor(G.decks[big].length / 2);
+  G.decks[i] = shuffleArr(G.decks[big].splice(0, n));
+  glog(`Food deck ${i + 1} ran out and was rebuilt from the bottom half of deck ${big + 1}.`);
+}
+function deckTop(i) { const d = G.decks[i]; return d.length ? d[d.length - 1] : null; }
+function drawFromDeck(i) { const c = G.decks[i].pop(); ensureDeck(i); return c; }
+function refillSlots() {
+  for (let i = 0; i < 4; i++) if (!G.slots[i]) { ensureDeck(i); if (G.decks[i].length) G.slots[i] = G.decks[i].pop(); ensureDeck(i); }
+}
+function topSig(i) { const c = deckTop(i); return c ? c.food.slice().sort().join('/') : null; }
+function tripleSig() {
+  const counts = {};
+  for (let i = 0; i < 4; i++) { const s = topSig(i); if (s) counts[s] = (counts[s] || 0) + 1; }
+  return Object.keys(counts).find(s => counts[s] >= 3) || null;
+}
+function discardTriple() {
+  const sig = tripleSig(); if (!sig) return;
+  for (let i = 0; i < 4; i++) if (topSig(i) === sig) { G.discard.push(G.decks[i].pop()); ensureDeck(i); }
+  glog(`Discarded the matching ${sig.split('/').map(foodName).join(' or ')} cards from the top of the food decks.`);
+}
+function gainFromKey(p, key) {
+  const [k, a] = key.split(':'); const i = +a;
+  if (k === 'slot') { const c = G.slots[i]; G.slots[i] = null; p.reserve.push({ card: c, side: 'bird' }); glog(`${p.name} took ${c.bird.name} (bird) from the supply.`); return c; }
+  const c = drawFromDeck(i); p.reserve.push({ card: c, side: 'food' }); glog(`${p.name} drew a ${c.food.map(foodName).join(' / ')} food card from deck ${i + 1}.`); return c;
+}
+function supplyKeys() {
+  const ks = [];
+  G.slots.forEach((c, i) => { if (c) ks.push('slot:' + i); });
+  G.decks.forEach((d, i) => { if (d.length) ks.push('deck:' + i); });
+  return ks;
+}
+
+/* ---------- green powers ---------- */
+function greensOf(p) {
+  const out = [];
+  p.flock.forEach(s => { const pw = s.card.bird.power; if (pw && pw.green && pw.t !== 'copy') out.push(pw); });
+  (G.copiedGreen[p.id] || []).forEach(pw => out.push(pw));
+  return out;
+}
+function wildFoods(p) { return new Set(greensOf(p).filter(g => g.t === 'wild').map(g => g.food)); }
+function powAny(p, f) { return !!f && greensOf(p).some(g => g.t === 'powany' && g.food === f); }
+
+/* ---------- payment ---------- */
+function effectiveCost(p, bird) {
+  const reqs = bird.food.slice();
+  greensOf(p).filter(g => g.t === 'ignore').forEach(g => { const i = reqs.indexOf(g.food); if (i >= 0) reqs.splice(i, 1); });
+  // specific foods first, wildcards last
+  reqs.sort((a, b) => (a === 'W') - (b === 'W'));
+  return reqs;
+}
+function matches(r, food, wild) { return r === 'W' || food.includes(r) || food.some(f => wild.has(f)); }
+function solvePay(reqs, foods, wild) {
+  if (!reqs.length) return foods.length === 0;
+  if (foods.length < reqs.length) return false;
+  const r = reqs[0], rest = reqs.slice(1);
+  for (let i = 0; i < foods.length; i++) {
+    if (matches(r, foods[i], wild) && solvePay(rest, foods.filter((_, k) => k !== i), wild)) return true;
+  }
+  for (let i = 0; i < foods.length; i++) for (let j = i + 1; j < foods.length; j++) {
+    if (solvePay(rest, foods.filter((_, k) => k !== i && k !== j), wild)) return true;
+  }
+  return false;
+}
+function suggestPay(p, reqs) {
+  const wild = wildFoods(p);
+  const pool = p.reserve.map((r, i) => ({ r, i })).filter(x => x.r.side === 'food');
+  // prefer single-food cards and cards that are not wild
+  pool.sort((a, b) => a.r.card.food.length - b.r.card.food.length);
+  const used = new Set(); const pick = []; const unmet = [];
+  for (const r of reqs) {
+    let found = pool.find(x => !used.has(x.i) && r !== 'W' && x.r.card.food.includes(r));
+    if (!found) found = pool.find(x => !used.has(x.i) && r !== 'W' && x.r.card.food.some(f => wild.has(f)));
+    if (!found && r === 'W') found = pool.find(x => !used.has(x.i));
+    if (found) { used.add(found.i); pick.push(found.i); } else unmet.push(r);
+  }
+  for (const r of unmet) {
+    const two = pool.filter(x => !used.has(x.i)).slice(0, 2);
+    if (two.length < 2) return null;
+    two.forEach(x => { used.add(x.i); pick.push(x.i); });
+  }
+  return pick;
+}
+function eggTotal(p) { return p.nestEggs + p.flock.reduce((a, s) => a + s.eggs, 0); }
+function canAfford(p, bird) {
+  if (eggTotal(p) < bird.eggCost) return false;
+  return suggestPay(p, effectiveCost(p, bird)) !== null;
+}
+
+/* ---------- eggs ---------- */
+function eggSpaceKeys(p, exclude = []) {
+  const ks = [];
+  if (p.nestEggs < NEST_LIMIT) ks.push('nest:' + p.id);
+  p.flock.forEach((s, i) => { if (s.eggs < s.card.bird.eggLimit) ks.push(`bird:${p.id}:${i}`); });
+  return ks.filter(k => !exclude.includes(k));
+}
+function eggHolderKeys(p) {
+  const ks = [];
+  if (p.nestEggs > 0) ks.push('nest:' + p.id);
+  p.flock.forEach((s, i) => { if (s.eggs > 0) ks.push(`bird:${p.id}:${i}`); });
+  return ks;
+}
+function addEgg(p, key) { if (key.startsWith('nest')) p.nestEggs++; else p.flock[+key.split(':')[2]].eggs++; }
+function removeEgg(p, key) { if (key.startsWith('nest')) p.nestEggs--; else p.flock[+key.split(':')[2]].eggs--; }
+function cardLabel(p, key) { return key.startsWith('nest') ? 'the Nest' : p.flock[+key.split(':')[2]].card.bird.name; }
+
+/* ---------- human turn ---------- */
+async function humanTurn(p) {
+  G.token = { p: p.id, i: -1 };
+  await chooseCopiedGreen(p);
+  let done = false;
+  while (!done) {
+    const playable = p.reserve.some(r => r.side === 'bird' && canAfford(p, r.card.bird));
+    const r = await UI.ask({ player: p.id, title: `${p.name}: choose a Nest action`,
+      prompt: playable ? 'Play a bird, draw 2 cards, or lay up to 3 eggs.' : 'You cannot afford any bird in your Reserve right now. Draw 2 cards or lay up to 3 eggs.',
+      buttons: [
+        { id: 'play', label: 'Play a bird', disabled: !playable, primary: true },
+        { id: 'draw', label: 'Draw 2 cards' },
+        { id: 'lay', label: 'Lay up to 3 eggs' }] });
+    if (r.id === 'play') done = await actPlay(p);
+    else if (r.id === 'draw') { await actDraw(p); done = true; }
+    else { await actLay(p); done = true; }
+  }
+  await activateFlock(p);
+  G.token = { p: -1, i: -1 };
+}
+
+async function chooseCopiedGreen(p) {
+  G.copiedGreen[p.id] = [];
+  const copiers = p.flock.filter(s => s.card.bird.power && s.card.bird.power.t === 'copy' && s.card.bird.power.green);
+  for (const s of copiers) {
+    const keys = [];
+    G.players.forEach(q => { if (q.id !== p.id) q.flock.forEach((t, i) => { const pw = t.card.bird.power; if (pw && pw.green && pw.t !== 'copy') keys.push(`bird:${q.id}:${i}`); }); });
+    if (!keys.length) continue;
+    const r = await UI.ask({ player: p.id, title: `${s.card.bird.name}: copy a green power`,
+      prompt: 'Choose a green power in another Flock. It works for you for this whole turn.', targets: keys,
+      buttons: [{ id: 'skip', label: 'Do not copy' }] });
+    if (r.key) {
+      const [, q, i] = r.key.split(':'); const src = G.players[+q].flock[+i].card.bird;
+      G.copiedGreen[p.id].push(src.power);
+      glog(`${p.name}'s ${s.card.bird.name} copies the green power of ${src.name}.`);
+    }
+  }
+}
+
+async function actPlay(p) {
+  const birdKeys = p.reserve.map((r, i) => (r.side === 'bird' && canAfford(p, r.card.bird)) ? `res:${p.id}:${i}` : null).filter(Boolean);
+  const r = await UI.ask({ player: p.id, title: 'Play a bird', prompt: 'Choose a bird in your Reserve. Only birds you can afford are selectable.',
+    targets: birdKeys, buttons: [{ id: 'back', label: 'Back' }] });
+  if (r.id === 'back') return false;
+  const ri = +r.key.split(':')[2];
+  const bird = p.reserve[ri].card.bird;
+  const reqs = effectiveCost(p, bird);
+  const wild = wildFoods(p);
+  let payIdx = [];
+  if (reqs.length) {
+    const sug = suggestPay(p, reqs) || [];
+    const foodKeys = p.reserve.map((x, i) => x.side === 'food' ? `res:${p.id}:${i}` : null).filter(Boolean);
+    const validate = keys => solvePay(reqs, keys.map(k => p.reserve[+k.split(':')[2]].card.food), wild);
+    const reqText = reqs.map(foodName).join(', ');
+    const pay = await UI.ask({ player: p.id, title: `Pay for ${bird.name}`,
+      prompt: `Cost: ${reqText}${bird.eggCost ? ` + ${bird.eggCost} egg` : ''}. Select the food cards to discard. Any 2 food cards can stand in for 1 food. A suggestion is preselected.`,
+      multi: { keys: foodKeys, preselect: sug.map(i => `res:${p.id}:${i}`), validate },
+      buttons: [{ id: 'ok', label: 'Pay and play', primary: true, needsValid: true }, { id: 'back', label: 'Back' }] });
+    if (pay.id === 'back') return false;
+    payIdx = pay.selected.map(k => +k.split(':')[2]);
+  }
+  const eggKeys = [];
+  for (let e = 0; e < bird.eggCost; e++) {
+    const holders = eggHolderKeys(p).filter(k => eggKeys.filter(x => x === k).length < eggCountAt(p, k));
+    const er = await UI.ask({ player: p.id, title: `Pay an egg for ${bird.name}`, prompt: 'Choose a card to remove 1 egg from.', targets: holders });
+    eggKeys.push(er.key);
+  }
+  // commit
+  eggKeys.forEach(k => removeEgg(p, k));
+  const card = p.reserve[ri].card;
+  const paid = payIdx.map(i => p.reserve[i].card);
+  p.reserve = p.reserve.filter((_, i) => i !== ri && !payIdx.includes(i));
+  G.discard.push(...paid);
+  p.flock.push({ card, eggs: 0, tucked: [] });
+  glog(`${p.name} played ${bird.name}${paid.length ? `, discarding ${paid.length} food card${paid.length > 1 ? 's' : ''}` : ''}${eggKeys.length ? ` and ${eggKeys.length} egg` : ''}.`);
+  if (bird.power && bird.power.green && bird.power.t === 'copy') await chooseCopiedGreen(p);
+  return true;
+}
+function eggCountAt(p, k) { return k.startsWith('nest') ? p.nestEggs : p.flock[+k.split(':')[2]].eggs; }
+
+async function actDraw(p) {
+  for (let n = 0; n < 2; n++) {
+    const keys = supplyKeys();
+    if (!keys.length) { glog('The supply is empty.'); return; }
+    const trip = tripleSig();
+    const btns = [];
+    if (trip) btns.push({ id: 'triple', label: 'Discard the 3+ matching food cards' });
+    const r = await UI.ask({ player: p.id, title: `Draw 2 cards (${n + 1} of 2)`,
+      prompt: 'Take a face-up bird from the supply, or the top card of a food deck. Food decks refill right away; bird slots refill at the end of your turn.',
+      targets: keys, buttons: btns });
+    if (r.id === 'triple') { discardTriple(); n--; continue; }
+    gainFromKey(p, r.key);
+  }
+}
+
+async function actLay(p) {
+  const used = [];
+  for (let n = 0; n < 3; n++) {
+    const keys = eggSpaceKeys(p, used);
+    if (!keys.length) { if (n === 0) glog(`${p.name} has no room for eggs.`); break; }
+    const r = await UI.ask({ player: p.id, title: `Lay eggs (${n + 1} of 3)`, prompt: 'Choose a card with room for an egg. Each egg must go on a different card.',
+      targets: keys, buttons: [{ id: 'done', label: n ? 'Done laying' : 'Lay no eggs' }] });
+    if (r.id === 'done') break;
+    addEgg(p, r.key); used.push(r.key);
+    glog(`${p.name} laid an egg on ${cardLabel(p, r.key)}.`);
+  }
+}
+
+/* ---------- brown powers ---------- */
+async function activateFlock(p) {
+  for (let i = 0; i < p.flock.length; i++) {
+    const s = p.flock[i]; const pw = s.card.bird.power;
+    if (!pw || pw.green) continue;
+    G.token = { p: p.id, i };
+    const can = canActivate(p, pw);
+    const r = await UI.ask({ player: p.id, title: `Activate ${s.card.bird.name}?`, prompt: powerText(pw) + (can ? '' : ' (You cannot pay this power\'s cost right now.)'),
+      focusKey: `bird:${p.id}:${i}`,
+      buttons: [{ id: 'yes', label: 'Activate', disabled: !can, primary: true }, { id: 'no', label: 'Skip' }] });
+    if (r.id === 'yes') await runPower(p, s, pw);
+  }
+}
+
+function canPayStep(p, st) {
+  if (st.t === 'degg') return eggTotal(p) > 0;
+  if (st.t === 'dcard') return reserveKeys(p, st).length > 0;
+  return true;
+}
+function canActivate(p, pw) {
+  if (pw.gain.some(s => s.t === 'copy')) return copyTargets(p).length > 0;
+  return pw.cost.every(st => canPayStep(p, st));
+}
+function copyTargets(p) {
+  const keys = [];
+  G.players.forEach(q => { if (q.id !== p.id) q.flock.forEach((t, i) => {
+    const pw = t.card.bird.power;
+    if (pw && !pw.green && !pw.gain.some(s => s.t === 'copy') && canActivate(p, pw)) keys.push(`bird:${q.id}:${i}`);
+  }); });
+  return keys;
+}
+function reserveKeys(p, st) {
+  return p.reserve.map((r, i) => {
+    let ok;
+    if (st.what === 'any') ok = true;
+    else if (st.what === 'bird') ok = r.side === 'bird';
+    else ok = r.side === 'food' && (!st.food || st.food === 'W' || powAny(p, st.food) || r.card.food.includes(st.food));
+    return ok ? `res:${p.id}:${i}` : null;
+  }).filter(Boolean);
+}
+
+async function runPower(p, host, pw) {
+  for (const st of pw.cost) await doStep(p, host, st, true);
+  for (const st of pw.gain) await doStep(p, host, st, false);
+}
+
+async function doStep(p, host, st, mandatory) {
+  const hostName = host.card.bird.name;
+  const skip = mandatory ? [] : [{ id: 'skip', label: 'Skip' }];
+  const title = `${hostName}: ${stepText(st)}`;
+  switch (st.t) {
+    case 'draw': {
+      let keys;
+      if (st.what === 'any') keys = supplyKeys();
+      else if (st.what === 'bird') keys = G.slots.map((c, i) => c && (!st.food || powAny(p, st.food) || c.bird.food.includes(st.food)) ? 'slot:' + i : null).filter(Boolean);
+      else keys = G.decks.map((d, i) => d.length && (st.food === 'W' || powAny(p, st.food) || deckTop(i).food.includes(st.food)) ? 'deck:' + i : null).filter(Boolean);
+      if (!keys.length) { flash(`${hostName}: nothing in the supply matches.`); return; }
+      const r = await UI.ask({ player: p.id, title, prompt: 'Choose a matching card from the supply.', targets: keys, buttons: skip });
+      if (r.key) gainFromKey(p, r.key);
+      return;
+    }
+    case 'tuck': {
+      const keys = reserveKeys(p, { what: st.what === 'bird' ? 'bird' : 'food', food: st.food });
+      if (!keys.length) { flash(`${hostName}: you have no matching card to tuck.`); return; }
+      const r = await UI.ask({ player: p.id, title, prompt: `Choose a card in your Reserve to tuck behind ${hostName} (1 point).`, targets: keys, buttons: skip });
+      if (r.key) { const i = +r.key.split(':')[2]; const c = p.reserve.splice(i, 1)[0]; host.tucked.push(c.card); glog(`${p.name} tucked a card behind ${hostName}.`); }
+      return;
+    }
+    case 'hunt': {
+      const keys = G.decks.map((d, i) => d.length ? 'deck:' + i : null).filter(Boolean);
+      if (!keys.length) return;
+      const r = await UI.ask({ player: p.id, title, prompt: `Choose a food deck. Its top card's bird side is revealed: if the wingspan is under ${st.max} cm it is tucked behind ${hostName}; otherwise it is discarded.`, targets: keys, buttons: skip });
+      if (!r.key) return;
+      const c = drawFromDeck(+r.key.split(':')[1]);
+      if (c.bird.wingspan < st.max) { host.tucked.push(c); flash(`Hunt success! ${c.bird.name} (${c.bird.wingspan} cm) was tucked behind ${hostName}.`); }
+      else { G.discard.push(c); flash(`Hunt failed. ${c.bird.name} (${c.bird.wingspan} cm) was too large and was discarded.`); }
+      return;
+    }
+    case 'lay': {
+      const keys = eggSpaceKeys(p);
+      if (!keys.length) { flash(`${hostName}: no card has room for an egg.`); return; }
+      const r = await UI.ask({ player: p.id, title, prompt: 'Choose a card with room for an egg.', targets: keys, buttons: skip });
+      if (r.key) { addEgg(p, r.key); glog(`${p.name} laid an egg on ${cardLabel(p, r.key)}.`); }
+      return;
+    }
+    case 'degg': {
+      const r = await UI.ask({ player: p.id, title, prompt: 'Choose a card to discard 1 egg from.', targets: eggHolderKeys(p) });
+      removeEgg(p, r.key); glog(`${p.name} discarded an egg from ${cardLabel(p, r.key)}.`);
+      return;
+    }
+    case 'dcard': {
+      const r = await UI.ask({ player: p.id, title, prompt: 'Choose a card in your Reserve to discard.', targets: reserveKeys(p, st) });
+      const i = +r.key.split(':')[2]; const c = p.reserve.splice(i, 1)[0]; G.discard.push(c.card);
+      glog(`${p.name} discarded a card from their Reserve.`);
+      return;
+    }
+    case 'alldraw': {
+      const keys = G.decks.map((d, i) => d.length ? 'deck:' + i : null).filter(Boolean);
+      if (!keys.length) return;
+      const r = await UI.ask({ player: p.id, title, prompt: 'Choose 1 food deck. Every player draws its top card, starting with you.', targets: keys, buttons: skip });
+      if (!r.key) return;
+      const d = +r.key.split(':')[1];
+      const n = G.players.length;
+      for (let k = 0; k < n; k++) {
+        const q = G.players[(p.id + k) % n];
+        if (q.automa) {
+          if (G.discard.length) { q.tucked.push(G.discard.pop()); glog('Automa tucked a card from the discard pile under her Nest.'); }
+        } else if (G.decks[d].length) gainFromKey(q, 'deck:' + d);
+      }
+      return;
+    }
+    case 'copy': {
+      const keys = copyTargets(p);
+      const r = await UI.ask({ player: p.id, title, prompt: 'Choose a bird with a brown power in another Flock. You use its power as if it were this bird.', targets: keys, buttons: skip });
+      if (!r.key) return;
+      const [, q, i] = r.key.split(':'); const src = G.players[+q].flock[+i].card.bird;
+      glog(`${p.name}'s ${hostName} copies ${src.name}.`);
+      await runPower(p, host, src.power);
+      return;
+    }
+  }
+}
+
+/* ---------- text ---------- */
+function stepText(st) {
+  switch (st.t) {
+    case 'draw':
+      if (st.what === 'any') return 'draw any 1 card';
+      if (st.what === 'bird') return st.food ? `draw 1 bird with ${foodName(st.food)} in its cost` : 'draw 1 bird from the supply';
+      return st.food === 'W' ? 'draw 1 food card of any type' : `draw 1 ${foodName(st.food)} food card`;
+    case 'tuck': return st.what === 'bird' ? 'tuck a bird card from your Reserve' : `tuck a ${foodName(st.food)} card from your Reserve`;
+    case 'hunt': return `hunt for a bird with wingspan under ${st.max} cm`;
+    case 'lay': return 'lay 1 egg';
+    case 'degg': return 'discard 1 egg';
+    case 'dcard': return st.what === 'any' ? 'discard 1 card from your Reserve' : st.what === 'bird' ? 'discard 1 bird card from your Reserve' : `discard 1 ${foodName(st.food)} card`;
+    case 'alldraw': return 'all players draw 1 card from the same food deck';
+    case 'copy': return 'copy a brown power in another Flock';
+  }
+  return '';
+}
+function powerText(pw) {
+  if (!pw) return 'No power.';
+  if (pw.green) {
+    if (pw.t === 'ignore') return `Ongoing: ignore 1 ${foodName(pw.food)} in bird costs.`;
+    if (pw.t === 'wild') return `Ongoing: use ${foodName(pw.food)} as any food when playing birds.`;
+    if (pw.t === 'powany') return `Ongoing: ${foodName(pw.food)} in powers counts as any food.`;
+    return 'Ongoing: copy 1 green power in another Flock.';
+  }
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  if (pw.cost.length) {
+    const g = groupGain(pw.gain);
+    return `${cap(pw.cost.map(stepText).join(' and '))} to ${g}.`;
+  }
+  if (pw.either) return `${cap(pw.gain.map(stepText).join(', and/or '))}.`;
+  return cap(groupGain(pw.gain)) + '.';
+}
+function groupGain(steps) {
+  if (steps.length === 2 && steps[0].t === steps[1].t && steps[0].what === steps[1].what) {
+    const t = stepText(steps[0]);
+    return t.replace('draw any 1 card', 'draw any 2 cards').replace('lay 1 egg', 'lay 2 eggs').replace(/\b1 /, '2 ');
+  }
+  return steps.map(stepText).join(' and ');
+}
+
+/* ---------- Automa ---------- */
+function automaReshuffle() {
+  G.automaDeck = shuffleArr(G.automaSet.slice());
+  if (G.opts.difficulty !== 'easy') G.automaDeck.pop(); // set aside unseen
+}
+function automaGoalScore(card) {
+  const fake = { card, eggs: 0, tucked: [] };
+  return G.goals.filter(g => g.test(fake, [], 0, true)).length;
+}
+async function automaTurn(a) {
+  if (!G.automaDeck.length) { automaReshuffle(); glog('Automa shuffled her deck.'); }
+  const ac = G.automaDeck.pop();
+  G.automaCard = ac;
+  const steps = [];
+  ac.food.forEach(i => { if (G.decks[i].length) { const c = drawFromDeck(i); a.reserve.push({ card: c, side: 'food' }); steps.push(`Took a food card from deck ${i + 1}.`); } });
+  ac.tuck.forEach(i => { const c = G.slots[i]; if (c) { G.slots[i] = null; a.tucked.push(c); steps.push(`Tucked ${c.bird.name} from supply slot ${i + 1} under her Nest.`); } });
+  if (a.reserve.length >= ac.cost) {
+    G.discard.push(...a.reserve.splice(0, ac.cost).map(r => r.card));
+    let eggMsg = 'She had no egg to return.';
+    if (a.nestEggs > 0) { a.nestEggs--; eggMsg = 'Returned 1 egg from her Nest.'; }
+    else { const s = a.flock.find(s => s.eggs > 0); if (s) { s.eggs--; eggMsg = `Returned 1 egg from ${s.card.bird.name}.`; } }
+    let pick = -1;
+    const order = ac.arrow === 'ltr' ? [0, 1, 2, 3] : [3, 2, 1, 0];
+    if (ac.sel === 'goal') {
+      let best = -1, bestEgg = -1;
+      for (const i of order) {
+        const c = G.slots[i]; if (!c) continue;
+        const sc = automaGoalScore(c);
+        if (sc > best || (sc === best && c.bird.eggLimit > bestEgg)) { best = sc; bestEgg = c.bird.eggLimit; pick = i; }
+      }
+    } else {
+      const start = order.indexOf(ac.sel);
+      for (let k = 0; k < 4; k++) { const i = order[(start + k) % 4]; if (G.slots[i]) { pick = i; break; } }
+    }
+    if (pick >= 0) {
+      const c = G.slots[pick]; G.slots[pick] = null;
+      a.flock.push({ card: c, eggs: 0, tucked: [] });
+      steps.push(`Paid ${ac.cost} food cards. ${eggMsg} Added ${c.bird.name} to her Flock (${ac.sel === 'goal' ? 'goal-based pick' : 'supply slot ' + (ac.sel + 1)}).`);
+    } else steps.push(`Paid ${ac.cost} food cards. ${eggMsg} The bird supply was empty.`);
+  } else steps.push(`She has ${a.reserve.length} food card${a.reserve.length === 1 ? '' : 's'}, short of ${ac.cost}, so she plays no bird.`);
+  for (let e = 0; e < ac.eggs; e++) {
+    let placed = false;
+    for (let i = a.flock.length - 1; i >= 0; i--) { const s = a.flock[i]; if (s.eggs < s.card.bird.eggLimit) { s.eggs++; steps.push(`Laid an egg on ${s.card.bird.name}.`); placed = true; break; } }
+    if (!placed && a.nestEggs < NEST_LIMIT) { a.nestEggs++; steps.push('Laid an egg in her Nest.'); placed = true; }
+    if (!placed) steps.push('Had no room to lay an egg.');
+  }
+  G.automaLog = steps;
+  glog(`Automa revealed card ${ac.id}. ` + steps.join(' '));
+  await UI.ask({ player: a.id, automaTurn: true, title: `Automa's turn (card ${ac.id})`, prompt: steps.join(' '), buttons: [{ id: 'ok', label: 'Continue', primary: true }] });
+}
+
+/* ---------- end of turn & scoring ---------- */
+function endOfTurn(p) {
+  refillSlots();
+  p.turns++;
+  if (!G.endTriggered && G.players.some(q => q.flock.length >= 6)) {
+    G.endTriggered = true;
+    glog(`${p.name} has 6 birds. The game ends once every player has taken the same number of turns.`, 'flash');
+  }
+  const next = (G.cur + 1) % G.players.length;
+  if (G.endTriggered && next === G.first) { G.over = true; glog('Game over!', 'flash'); return; }
+  if (next === G.first) G.round++;
+  G.cur = next;
+}
+
+function goalPoints(p) {
+  return G.goals.map(g => p.flock.reduce((a, s, i) => a + (g.test(s, p.flock, i, p.automa) ? s.eggs : 0), 0));
+}
+function scorePlayer(p) {
+  const gp = goalPoints(p);
+  const goals = gp.reduce((a, b) => a + b, 0);
+  const birdEggs = p.flock.reduce((a, s) => a + s.eggs, 0);
+  if (p.automa) {
+    const rows = { birds: p.flock.length * 3, nestEggs: p.nestEggs * 3, birdEggs, tucked: p.tucked.length, goals, goalParts: gp };
+    rows.total = rows.birds + rows.nestEggs + rows.birdEggs + rows.tucked + goals;
+    return rows;
+  }
+  const rows = { birds: p.flock.reduce((a, s) => a + s.card.bird.points, 0), nestEggs: p.nestEggs, birdEggs, tucked: p.flock.reduce((a, s) => a + s.tucked.length, 0), goals, goalParts: gp };
+  rows.total = rows.birds + rows.nestEggs + rows.birdEggs + rows.tucked + goals;
+  return rows;
+}
+function scoreAll() {
+  const res = G.players.map(p => ({ p, s: scorePlayer(p), reserve: p.reserve.length }));
+  const best = Math.max(...res.map(r => r.s.total));
+  let top = res.filter(r => r.s.total === best);
+  if (top.length > 1) { const br = Math.max(...top.map(r => r.reserve)); top = top.filter(r => r.reserve === br); }
+  top.forEach(r => r.winner = true);
+  return res;
+}
+
+</script>
+<script>
+/* Wingspan Pocket — accessible HTML interface.
+ * All game state is shown as real text and buttons so the game works with a
+ * keyboard and a screen reader. p5.js (art.js) supplies the images.
+ */
+
+const UI = (() => {
+  let pending = null;      // current ask spec (with resolve)
+  let selected = new Set(); // multi-select keys
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- boot & setup form ---------- */
+  function boot() {
+    $('loading').hidden = true;
+    $('setup').hidden = false;
+    $('game').hidden = true;
+    const form = $('setup-form');
+    const sync = () => {
+      const solo = $('mode-solo').checked;
+      $('solo-opts').hidden = !solo;
+      $('hot-opts').hidden = solo;
+      $('opt-goals').disabled = solo;
+      if (solo) $('opt-goals').checked = true;
+      const n = +$('hot-count').value;
+      for (let i = 1; i <= 4; i++) $('hot-name-wrap-' + i).hidden = i > n;
+    };
+    form.addEventListener('change', sync);
+    sync();
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const solo = $('mode-solo').checked;
+      const names = solo ? [($('solo-name').value || 'You').trim()]
+        : Array.from({ length: +$('hot-count').value }, (_, i) => ($('hot-name-' + (i + 1)).value || `Player ${i + 1}`).trim());
+      start({ players: names, automa: solo, difficulty: $('difficulty').value, goals: $('opt-goals').checked, chooseStart: $('opt-choose').checked });
+    });
+    $('btn-rules').addEventListener('click', () => $('rules').showModal());
+    $('rules-close').addEventListener('click', () => $('rules').close());
+    $('btn-new').addEventListener('click', () => {
+      if (G && !G.over && !$('game').hidden) {
+        $('confirm-new').hidden = !$('confirm-new').hidden;
+        if (!$('confirm-new').hidden) $('confirm-yes').focus();
+        return;
+      }
+      showSetup();
+    });
+    $('confirm-yes').addEventListener('click', () => { $('confirm-new').hidden = true; showSetup(); });
+    $('confirm-no').addEventListener('click', () => { $('confirm-new').hidden = true; $('btn-new').focus(); });
+    const app = $('game');
+    app.addEventListener('click', onClick);
+    app.addEventListener('keydown', e => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][data-key]')) { e.preventDefault(); onClick(e); }
+    });
+    if (window.WS_AUTOSTART) start(window.WS_AUTOSTART);
+  }
+
+  function showSetup() {
+    if (pending) pending = null;
+    G = null;
+    $('setup').hidden = false; $('game').hidden = true; $('results').hidden = true;
+    $('setup-title').focus();
+  }
+
+  function start(opts) {
+    newGame(opts);
+    $('setup').hidden = true; $('game').hidden = false; $('results').hidden = true;
+    const myGame = G;
+    startGame().catch(err => { if (G === myGame) { console.error(err); announce('Something went wrong: ' + err.message); } });
+  }
+
+  /* ---------- ask / answer ---------- */
+  function ask(spec) {
+    return new Promise(resolve => {
+      const game = G;
+      pending = { ...spec, resolve: v => { if (G === game) resolve(v); } };
+      selected = new Set(spec.multi ? (spec.multi.preselect || []) : []);
+      render();
+      announce(spec.title + '. ' + (G.flash ? G.flash + ' ' : '') + spec.prompt);
+      if (window.WS_AUTOPLAY) { setTimeout(autoAnswer, 0); return; }
+      const h = $('prompt-title'); if (h) h.focus({ preventScroll: true });
+      revealTargets(spec);
+    });
+  }
+  function revealTargets(spec) {
+    const keys = spec.targets && spec.targets.length ? spec.targets : spec.multi ? spec.multi.keys : [];
+    if (!keys.length) return;
+    const els = keys.map(k => document.querySelector(`[data-key="${k}"].selectable`)).filter(Boolean);
+    const promptBottom = $('prompt').getBoundingClientRect().bottom;
+    const visible = els.some(el => { const r = el.getBoundingClientRect(); return r.bottom > promptBottom && r.top < window.innerHeight; });
+    if (!visible && els[0]) {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      els[0].scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }
+  function answer(v) {
+    const p = pending; if (!p) return;
+    pending = null;
+    if (v.id !== undefined || v.key !== undefined) G.flash = v.keepFlash ? G.flash : '';
+    p.resolve(v);
+  }
+  function multiValid() {
+    const m = pending && pending.multi; if (!m) return true;
+    const arr = [...selected];
+    if (m.min !== undefined && arr.length < m.min) return false;
+    if (m.max !== undefined && arr.length > m.max) return false;
+    return m.validate ? m.validate(arr) : true;
+  }
+  function onClick(e) {
+    const btn = e.target.closest('button[data-act]');
+    if (btn && pending) {
+      if (btn.disabled) return;
+      answer({ id: btn.dataset.act, selected: [...selected] });
+      return;
+    }
+    const el = e.target.closest('[data-key]');
+    if (!el || !pending || !el.classList.contains('selectable')) return;
+    const key = el.dataset.key;
+    if (pending.multi) {
+      if (selected.has(key)) selected.delete(key); else selected.add(key);
+      el.classList.toggle('chosen', selected.has(key));
+      el.setAttribute('aria-pressed', selected.has(key));
+      updateMultiStatus();
+      return;
+    }
+    answer({ key });
+  }
+  function updateMultiStatus() {
+    const ok = multiValid();
+    document.querySelectorAll('#prompt button[data-needs-valid]').forEach(b => { b.disabled = !ok; });
+    const st = $('multi-status');
+    if (st) st.textContent = `${selected.size} selected. ` + (ok ? 'This selection works.' : 'This selection does not pay the cost yet.');
+  }
+  function autoAnswer() {
+    const p = pending; if (!p) return;
+    if (typeof window.WS_AUTOPLAY === 'function') { const v = window.WS_AUTOPLAY(p, [...selected], multiValid()); if (v) return answer(v); }
+    const btns = (p.buttons || []).filter(b => !b.disabled);
+    if (p.multi) {
+      if (!multiValid()) { selected = new Set(p.multi.keys.slice(0, p.multi.min || 1)); }
+      const b = btns.find(b => b.primary) || btns[0];
+      return answer({ id: b.id, selected: [...selected] });
+    }
+    const targets = p.targets || [];
+    const safe = btns.filter(b => b.id !== 'back');
+    if (targets.length && (Math.random() < 0.85 || !safe.length)) return answer({ key: targets[Math.floor(Math.random() * targets.length)] });
+    const pool = safe.length ? safe : btns;
+    // favour the primary action so games progress
+    const pick = pool.find(b => b.primary && Math.random() < 0.6) || pool[Math.floor(Math.random() * pool.length)];
+    answer({ id: pick.id });
+  }
+
+  function announce(msg) { const l = $('live'); if (!l) return; l.textContent = ''; setTimeout(() => { l.textContent = msg; }, 30); }
+
+  /* ---------- descriptions (screen-reader text) ---------- */
+  function costText(b, p) {
+    const parts = b.food.map(foodName);
+    if (b.eggCost) parts.push(b.eggCost + ' egg');
+    return parts.length ? parts.join(', ') : 'free';
+  }
+  function birdDesc(card, slot) {
+    const b = card.bird;
+    const pw = b.power ? (b.power.green ? 'Green ongoing power: ' : 'Brown power: ') + powerText(b.power) : 'No power.';
+    let s = `${b.name} (${b.sci}). Cost: ${costText(b)}. ${b.points} points. Egg limit ${b.eggLimit}. Wingspan ${b.wingspan} cm. ${pw} ${b.fact}`;
+    if (slot) s += ` Eggs on card: ${slot.eggs} of ${b.eggLimit}. Tucked cards: ${slot.tucked.length}.`;
+    return s;
+  }
+  const foodCardName = c => c.food.map(f => cap(foodName(f))).join(' or ');
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  /* ---------- element builders ---------- */
+  function wrap(key, cls, desc, inner, extra = '') {
+    const sel = pending && (pending.targets || []).includes(key) || (pending && pending.multi && pending.multi.keys.includes(key));
+    const chosen = pending && pending.multi && selected.has(key);
+    if (sel) {
+      return `<div class="${cls} selectable${chosen ? ' chosen' : ''}" role="button" tabindex="0" data-key="${key}" aria-label="${esc(desc)}"${pending.multi ? ` aria-pressed="${!!chosen}"` : ''} ${extra}>${inner}<span class="pick-badge" aria-hidden="true">${pending.multi ? (chosen ? '✓ Selected' : 'Select') : 'Choose'}</span></div>`;
+    }
+    return `<div class="${cls}" data-key="${key || ''}" ${extra}><span class="sr-only">${esc(desc)}</span><div aria-hidden="true">${inner}</div></div>`;
+  }
+  function icons(foods) { return foods.map(f => `<img class="ico" src="${ART.food[f]}" alt="" title="${esc(foodName(f))}">`).join(''); }
+  function eggRow(n, cap) {
+    let h = '';
+    for (let i = 0; i < cap; i++) h += `<img class="egg" src="${i < n ? ART.egg : ART.eggOutline}" alt="">`;
+    return h;
+  }
+
+  function birdCard(card, key, opts = {}) {
+    const b = card.bird; const slot = opts.slot;
+    const pw = b.power;
+    const pcls = !pw ? 'none' : pw.green ? 'green' : 'brown';
+    const pwText = pw ? powerText(pw) : 'No power';
+    let inner = `
+      <div class="c-top"><span class="c-cost">${icons(b.food)}${b.eggCost ? `<img class="ico" src="${ART.egg}" alt="" title="egg">` : ''}${!b.food.length && !b.eggCost ? '<span class="free">Free</span>' : ''}</span>
+        <span class="c-pts" title="points"><b>${b.points}</b><small>pts</small></span></div>
+      <div class="c-name">${esc(b.name)}</div>
+      <div class="c-sci">${esc(b.sci)}</div>
+      <img class="c-art" src="${ART.bird[b.id]}" alt="">
+      <div class="c-stats"><span title="egg limit"><img class="egg sm" src="${ART.egg}" alt="">≤ ${b.eggLimit}</span><span title="wingspan">${b.wingspan} cm</span></div>
+      <div class="c-power ${pcls}">${pw ? (pw.green ? '<span class="tag">Ongoing</span> ' : '<span class="tag">When activated</span> ') : ''}${esc(pw ? pwText.replace(/^Ongoing: /, '') : 'No power')}</div>`;
+    if (!opts.mini) inner += `<div class="c-fact">${esc(b.fact)}</div>`;
+    if (slot) inner += `<div class="c-state"><span class="eggs">${eggRow(slot.eggs, b.eggLimit)}</span>${slot.tucked.length ? `<span class="tucked">+${slot.tucked.length} tucked</span>` : ''}</div>`;
+    if (opts.token) inner = `<div class="token">▶ Activating</div>` + inner;
+    if (opts.foodSide) inner += `<div class="c-back">Food side: ${icons(card.food)} ${esc(foodCardName(card))}</div>`;
+    const desc = (opts.prefix || '') + birdDesc(card, slot) + (opts.foodSide ? ` Food side: ${foodCardName(card)}.` : '') + (opts.token ? ' Currently activating.' : '');
+    return wrap(key, `card bird ${pcls}-pw${opts.mini ? ' mini' : ''}${opts.token ? ' is-token' : ''}`, desc, inner);
+  }
+  function foodCard(card, key) {
+    const inner = `<div class="f-icons">${icons(card.food)}</div><div class="f-name">${esc(foodCardName(card))}</div><div class="f-sub">Food card</div>`;
+    return wrap(key, 'card food', `Food card: ${foodCardName(card)}.`, inner);
+  }
+  function nestCard(p, mini) {
+    const key = 'nest:' + p.id;
+    let inner = `<div class="n-title">${p.automa ? "Automa's Nest" : 'Nest'}</div>
+      <div class="n-eggs">${eggRow(p.nestEggs, NEST_LIMIT)}</div>`;
+    if (p.automa) inner += `<div class="n-stat">${p.tucked.length} tucked · ${p.reserve.length} food cards</div><div class="n-sub">Birds 3 pts · Nest eggs 3 pts</div>`;
+    else inner += `<div class="n-sub">Holds up to 3 eggs. Start of the Flock: brown powers activate left to right after your Nest action.</div>`;
+    const desc = p.automa ? `Automa's Nest: ${p.nestEggs} of 3 eggs, ${p.tucked.length} tucked cards, ${p.reserve.length} food cards in her Reserve.` : `${p.name}'s Nest: ${p.nestEggs} of 3 eggs.`;
+    return wrap(key, `card nest${mini ? ' mini' : ''}${G.token.p === p.id && G.token.i === -1 ? ' is-home' : ''}`, desc, inner);
+  }
+  function deckBox(i) {
+    const d = G.decks[i]; const top = deckTop(i);
+    const key = 'deck:' + i;
+    const inner = top ? `<div class="f-icons">${icons(top.food)}</div><div class="f-name">${esc(foodCardName(top))}</div><div class="f-sub">Deck ${i + 1} · ${d.length} card${d.length === 1 ? '' : 's'}</div>`
+      : `<div class="f-name">Empty</div><div class="f-sub">Deck ${i + 1}</div>`;
+    const desc = top ? `Food deck ${i + 1}, ${d.length} cards. Top card: ${foodCardName(top)}.` : `Food deck ${i + 1} is empty.`;
+    return wrap(key, 'card food deck', desc, inner);
+  }
+
+  /* ---------- render ---------- */
+  function viewPlayer() {
+    if (pending && pending.player !== undefined && !G.players[pending.player].automa) return G.players[pending.player];
+    if (!G.players[G.cur].automa) return G.players[G.cur];
+    return G.players.find(p => !p.automa);
+  }
+
+  function render() {
+    if (!G) return;
+    const me = viewPlayer();
+    $('prompt').innerHTML = promptHTML();
+    $('supply').innerHTML = supplyHTML();
+    $('board-me').innerHTML = playerHTML(me, false);
+    $('board-others').innerHTML = G.players.filter(p => p !== me).map(p => playerHTML(p, true)).join('');
+    $('log-list').innerHTML = G.log.slice(-40).reverse().map(l => `<li class="${l.cls || ''}">${esc(l.msg)}</li>`).join('');
+    $('round').textContent = `Round ${G.round}${G.endTriggered ? ' · final round' : ''}`;
+    if (pending && pending.multi) updateMultiStatus();
+  }
+
+  function promptHTML() {
+    if (!pending) return `<h2 id="prompt-title" tabindex="-1">Working…</h2>`;
+    const p = G.players[pending.player];
+    const who = p ? `<span class="who ${p.automa ? 'automa' : ''}">${esc(p.name)}</span>` : '';
+    let h = `<div class="prompt-head">${who}<h2 id="prompt-title" tabindex="-1">${esc(pending.title)}</h2></div>`;
+    if (G.flash) h += `<p class="flash" role="status">${esc(G.flash)}</p>`;
+    h += `<p class="prompt-text">${esc(pending.prompt)}</p>`;
+    if (pending.automaTurn && G.automaCard) h += automaCardHTML(G.automaCard);
+    if (pending.multi) h += `<p id="multi-status" class="multi-status" aria-live="polite"></p>`;
+    if (pending.targets && pending.targets.length) h += `<p class="hint">Selectable cards are outlined and marked “Choose”.</p>`;
+    const btns = (pending.buttons || []).map(b => `<button type="button" data-act="${b.id}" class="${b.primary ? 'primary' : ''}"${b.disabled ? ' disabled' : ''}${b.needsValid ? ' data-needs-valid' : ''}>${esc(b.label)}</button>`).join('');
+    if (btns) h += `<div class="prompt-btns">${btns}</div>`;
+    if (pending.startHand !== undefined) {
+      const q = G.players[pending.startHand];
+      h += `<div class="row start-hand">${q.hand.map((c, i) => birdCard(c, `hand:${q.id}:${i}`, { foodSide: true, mini: true })).join('')}</div>`;
+    }
+    return h;
+  }
+
+  function automaCardHTML(ac) {
+    const cells = [0, 1, 2, 3].map(i => `<span class="ac-cell">${ac.food.includes(i) ? 'Food' : ''}${ac.tuck.includes(i) ? (ac.food.includes(i) ? ' + ' : '') + 'Tuck' : ''}${!ac.food.includes(i) && !ac.tuck.includes(i) ? '—' : ''}</span>`).join('');
+    return `<div class="automa-card" aria-label="Automa card ${esc(ac.id)}">
+      <div class="ac-row"><span class="ac-n">1</span><span class="ac-label">Gain</span><span class="ac-grid">${cells}</span></div>
+      <div class="ac-row"><span class="ac-n">2</span><span class="ac-label">Play</span><span>${ac.cost} food → ${ac.sel === 'goal' ? 'goal-based bird' : 'bird in slot ' + (ac.sel + 1)} <span class="ac-arrow">${ac.arrow === 'ltr' ? '→' : '←'}</span></span></div>
+      <div class="ac-row"><span class="ac-n">3</span><span class="ac-label">Eggs</span><span>${ac.eggs ? eggRow(ac.eggs, ac.eggs) : 'none'}</span></div>
+      <div class="ac-id">Card ${esc(ac.id)} · ${G.automaDeck.length} left in deck</div></div>`;
+  }
+
+  function supplyHTML() {
+    let h = `<h2 class="sec-title">Supply</h2><div class="supply-grid">`;
+    for (let i = 0; i < 4; i++) {
+      h += `<div class="sup-col"><div class="sup-label" aria-hidden="true">${i + 1}</div>${deckBox(i)}`;
+      h += G.slots[i] ? birdCard(G.slots[i], 'slot:' + i, { mini: true, prefix: `Supply slot ${i + 1}: ` }) : `<div class="card empty-slot"><span>Slot ${i + 1} empty<br>refills at end of turn</span></div>`;
+      h += `</div>`;
+    }
+    h += `</div><div class="sup-meta"><div class="discard"><b>Discard pile:</b> ${G.discard.length} card${G.discard.length === 1 ? '' : 's'}${G.discard.length ? ` (top: ${esc(foodCardName(G.discard[G.discard.length - 1]))})` : ''}</div>`;
+    if (G.goals.length) {
+      h += `<div class="goals"><h3>Goal display</h3><ul>${G.goals.map((g, i) => `<li><span class="g-n">${i + 1}</span><span>+1 point per egg on birds with <b>${esc(g.text)}</b>${g.food ? ` <img class="ico sm" src="${ART.food[g.food]}" alt="">` : ''}${g.pct !== undefined ? ` <small>(${g.pct}% of birds${g.statNote ? ' ' + g.statNote : ''})</small>` : ''}</span></li>`).join('')}</ul></div>`;
+    }
+    h += `</div>`;
+    return h;
+  }
+
+  function playerHTML(p, compact) {
+    const s = scorePlayer(p);
+    const turn = G.players[G.cur] === p;
+    let h = `<section class="player ${compact ? 'compact' : ''} ${p.automa ? 'is-automa' : ''}" aria-labelledby="ph-${p.id}">
+      <div class="p-head"><h2 class="sec-title" id="ph-${p.id}">${esc(p.name)}${p.automa ? '' : compact ? '' : ' — your Flock'}</h2>
+      ${turn ? '<span class="chip now">Taking a turn</span>' : ''}${G.first === p.id ? '<span class="chip">First player</span>' : ''}
+      <span class="chip">${p.flock.length} of 6 birds</span><span class="chip score">Score so far: ${s.total}</span></div>`;
+    h += `<div class="row flock" aria-label="${esc(p.name)}'s Flock">${nestCard(p, compact)}${p.flock.map((sl, i) => birdCard(sl.card, `bird:${p.id}:${i}`, { slot: sl, mini: compact, token: G.token.p === p.id && G.token.i === i, prefix: `Flock position ${i + 1}: ` })).join('')}</div>`;
+    if (!p.automa && p.reserve) {
+      const birds = p.reserve.map((r, i) => ({ r, i })).filter(x => x.r.side === 'bird');
+      const foods = p.reserve.map((r, i) => ({ r, i })).filter(x => x.r.side === 'food').sort((a, b) => a.r.card.food.join().localeCompare(b.r.card.food.join()));
+      h += `<h3 class="sub-title">${compact ? 'Reserve' : 'Your Reserve'} <small>${birds.length} bird${birds.length === 1 ? '' : 's'}, ${foods.length} food</small></h3>`;
+      h += `<div class="row reserve">${birds.map(x => birdCard(x.r.card, `res:${p.id}:${x.i}`, { mini: compact, prefix: 'In Reserve: ' })).join('')}${foods.map(x => foodCard(x.r.card, `res:${p.id}:${x.i}`)).join('')}${!p.reserve.length ? '<p class="muted">Empty</p>' : ''}</div>`;
+    }
+    return h + `</section>`;
+  }
+
+  /* ---------- results ---------- */
+  function showResults(res) {
+    const r = $('results');
+    const winners = res.filter(x => x.winner).map(x => x.p.name);
+    const gl = G.goals.length;
+    const rows = [['Birds', 'birds'], ['Eggs in Nest', 'nestEggs'], ['Eggs on birds', 'birdEggs'], ['Tucked cards', 'tucked']];
+    let t = `<table><caption>Final scores</caption><thead><tr><th scope="col">Category</th>${res.map(x => `<th scope="col">${esc(x.p.name)}</th>`).join('')}</tr></thead><tbody>`;
+    rows.forEach(([lab, k]) => { t += `<tr><th scope="row">${lab}</th>${res.map(x => `<td>${x.s[k]}</td>`).join('')}</tr>`; });
+    for (let i = 0; i < gl; i++) t += `<tr><th scope="row">Goal ${i + 1}</th>${res.map(x => `<td>${x.s.goalParts[i]}</td>`).join('')}</tr>`;
+    t += `<tr class="total"><th scope="row">Total</th>${res.map(x => `<td>${x.s.total}</td>`).join('')}</tr></tbody></table>`;
+    r.innerHTML = `<h2 id="results-title" tabindex="-1">${winners.length > 1 ? 'Shared victory: ' + esc(winners.join(' and ')) : esc(winners[0]) + (winners[0] === 'You' ? ' win!' : ' wins!')}</h2>
+      ${res.some(x => x.p.automa) ? '<p class="muted">Automa scores 3 points per bird and per Nest egg, 1 per egg on birds, 1 per tucked card, plus goals (tuck-capable birds count as having a tucked card).</p>' : ''}
+      <div class="table-wrap">${t}</div><div class="prompt-btns"><button type="button" class="primary" id="again">New game</button></div>`;
+    r.hidden = false;
+    $('prompt').innerHTML = `<h2 tabindex="-1">Game over</h2><p class="prompt-text">Final scores are below.</p>`;
+    $('again').addEventListener('click', showSetup);
+    $('results-title').focus();
+    announce('Game over. ' + (winners.length > 1 ? 'Shared victory.' : winners[0] + ' won.') + ' ' + res.map(x => `${x.p.name} ${x.s.total} points`).join(', '));
+  }
+
+  return { boot, ask, render, announce, showResults };
+})();
+
+</script>
+<script>
+/* Wingspan Pocket — original procedural artwork drawn with p5.js.
+ * Every bird portrait is generated from a small shape/color recipe in data.js,
+ * so none of the published card illustrations are reproduced.
+ * Images are rendered once to off-screen p5.Graphics and cached as data URLs.
+ */
+
+const ART = { bird: {}, food: {}, egg: null, eggOutline: null };
+
+const FOOD_STYLE = {
+  I: { bg: '#f1d2a8', ink: '#6b3d16' },
+  S: { bg: '#f3e09a', ink: '#7a5a0c' },
+  F: { bg: '#a9d0f0', ink: '#174a78' },
+  R: { bg: '#f5b3b3', ink: '#8e1426' },
+  M: { bg: '#d3cdc5', ink: '#3e3934' },
+};
+
+function setup() {
+  noCanvas();
+  const status = document.getElementById('loading-status');
+  // Generate in small batches so the loading message can update.
+  const jobs = [];
+  FOOD_TYPES.concat(['W']).forEach(f => jobs.push(() => { ART.food[f] = foodIcon(f); }));
+  jobs.push(() => { ART.egg = eggIcon(false); ART.eggOutline = eggIcon(true); });
+  BIRDS.forEach(b => jobs.push(() => { ART.bird[b.id] = birdArt(b); }));
+  let k = 0;
+  function step() {
+    const end = Math.min(jobs.length, k + 6);
+    for (; k < end; k++) jobs[k]();
+    if (status) status.textContent = `Painting birds… ${Math.round(100 * k / jobs.length)}%`;
+    if (k < jobs.length) setTimeout(step, 0); else UI.boot();
+  }
+  step();
+}
+
+/* ---------- helpers ---------- */
+function shade(g, hex, amt) { return g.lerpColor(g.color(hex), g.color(amt < 0 ? '#000000' : '#ffffff'), Math.abs(amt)); }
+function toURL(g, type) { const u = g.elt.toDataURL(type || 'image/png', 0.88); g.remove(); return u; }
+
+/* ---------- food icons ---------- */
+function foodIcon(f) {
+  const g = createGraphics(64, 64); g.pixelDensity(2);
+  g.clear();
+  if (f === 'W') {
+    const cols = ['#f1d2a8', '#f3e09a', '#a9d0f0', '#f5b3b3', '#d3cdc5'];
+    g.stroke('#2a2a2a'); g.strokeWeight(2.5);
+    for (let i = 0; i < 5; i++) { g.fill(cols[i]); g.arc(32, 32, 56, 56, -HALF_PI + i * TWO_PI / 5, -HALF_PI + (i + 1) * TWO_PI / 5, PIE); }
+    g.noFill(); g.circle(32, 32, 56);
+    g.fill('#2a2a2a'); g.noStroke(); g.circle(32, 32, 8);
+    return toURL(g);
+  }
+  const st = FOOD_STYLE[f];
+  g.stroke('#2a2a2a'); g.strokeWeight(2.5); g.fill(st.bg); g.circle(32, 32, 58);
+  g.fill(st.ink); g.stroke(st.ink);
+  if (f === 'I') { // caterpillar
+    g.noStroke();
+    const pts = [[16, 40], [24, 34], [32, 31], [40, 34], [47, 30]];
+    pts.forEach(([x, y], i) => g.circle(x, y, i === 4 ? 13 : 12));
+    g.stroke(st.ink); g.strokeWeight(2); g.line(47, 25, 44, 17); g.line(50, 25, 54, 18);
+    g.stroke(st.bg); g.strokeWeight(1.5); pts.slice(0, 4).forEach(([x, y]) => g.line(x, y - 4, x, y + 4));
+    g.noStroke(); g.fill(st.bg); g.circle(49, 29, 3);
+  } else if (f === 'S') { // wheat head
+    g.strokeWeight(2.5); g.line(32, 54, 32, 12);
+    g.noStroke();
+    for (let i = 0; i < 4; i++) {
+      const y = 20 + i * 8;
+      g.push(); g.translate(26, y); g.rotate(-0.6); g.ellipse(0, 0, 12, 6.5); g.pop();
+      g.push(); g.translate(38, y); g.rotate(0.6); g.ellipse(0, 0, 12, 6.5); g.pop();
+    }
+    g.ellipse(32, 13, 6, 10);
+  } else if (f === 'F') { // fish
+    g.noStroke();
+    g.ellipse(30, 32, 34, 18);
+    g.triangle(44, 32, 55, 22, 55, 42);
+    g.fill(st.bg); g.circle(20, 29, 5);
+    g.stroke(st.bg); g.strokeWeight(1.5); g.noFill(); g.arc(28, 32, 10, 14, -HALF_PI, HALF_PI);
+  } else if (f === 'R') { // cherries
+    g.noFill(); g.stroke('#2f6b2a'); g.strokeWeight(2.5);
+    g.bezier(22, 38, 26, 22, 34, 16, 38, 12); g.bezier(42, 40, 42, 26, 40, 18, 38, 12);
+    g.noStroke(); g.fill('#2f6b2a'); g.push(); g.translate(43, 13); g.rotate(-0.4); g.ellipse(0, 0, 13, 6); g.pop();
+    g.fill(st.ink); g.circle(22, 42, 17); g.circle(42, 44, 17);
+    g.fill(255, 255, 255, 160); g.circle(19, 39, 4); g.circle(39, 41, 4);
+  } else if (f === 'M') { // mouse
+    g.noStroke();
+    g.ellipse(30, 38, 32, 20);
+    g.ellipse(45, 33, 16, 13);
+    g.circle(40, 25, 10); g.fill(st.bg); g.circle(40, 25, 5);
+    g.fill(st.bg); g.circle(48, 31, 3);
+    g.noFill(); g.stroke(st.ink); g.strokeWeight(2.5); g.bezier(15, 40, 6, 44, 10, 52, 18, 50);
+  }
+  return toURL(g);
+}
+
+function eggIcon(outline) {
+  const g = createGraphics(40, 48); g.pixelDensity(2); g.clear();
+  g.stroke(outline ? '#6b5a4a' : '#5a4636'); g.strokeWeight(2.2);
+  if (outline) { g.drawingContext.setLineDash([3, 3]); g.noFill(); } else g.fill('#f6e2cf');
+  g.beginShape();
+  for (let a = 0; a < TWO_PI; a += 0.1) {
+    const x = 20 + 14 * Math.sin(a);
+    const y = 26 - 19 * Math.cos(a) * (Math.cos(a) > 0 ? 1 : 0.8);
+    g.vertex(x, y);
+  }
+  g.endShape(CLOSE);
+  if (!outline) { g.noStroke(); g.fill(255, 255, 255, 170); g.ellipse(15, 18, 5, 9); }
+  return toURL(g);
+}
+
+/* ---------- bird portraits ---------- */
+const BODY = {
+  perch: { bw: 72, bh: 44, tilt: -0.45, hr: 19, neck: 0, leg: 12, tail: 34, base: 'branch', sc: 1 },
+  raptor: { bw: 78, bh: 50, tilt: -0.85, hr: 19, neck: 0, leg: 12, tail: 34, base: 'branch', sc: 0.95 },
+  owl: { bw: 78, bh: 60, tilt: -1.5, hr: 28, neck: -10, leg: 10, tail: 16, base: 'branch', sc: 0.92 },
+  parrot: { bw: 64, bh: 40, tilt: -1.05, hr: 18, neck: 0, leg: 10, tail: 50, base: 'branch', sc: 0.95 },
+  duck: { bw: 100, bh: 40, tilt: 0.05, hr: 17, neck: 16, leg: 0, tail: 16, base: 'water', sc: 1 },
+  goose: { bw: 96, bh: 40, tilt: 0.0, hr: 14, neck: 42, leg: 0, tail: 14, base: 'water', sc: 0.9 },
+  wader: { bw: 70, bh: 38, tilt: -0.15, hr: 12, neck: 44, leg: 50, tail: 16, base: 'marsh', sc: 0.82 },
+  shore: { bw: 64, bh: 38, tilt: -0.2, hr: 14, neck: 12, leg: 28, tail: 20, base: 'sand', sc: 1 },
+  upright: { bw: 86, bh: 50, tilt: -1.52, hr: 19, neck: -6, leg: 6, tail: 8, base: 'ice', sc: 0.95 },
+  ground: { bw: 94, bh: 58, tilt: -0.15, hr: 12, neck: 30, leg: 30, tail: 30, base: 'grass', sc: 0.82 },
+  ratite: { bw: 90, bh: 56, tilt: -0.1, hr: 11, neck: 62, leg: 56, tail: 20, base: 'grass', sc: 0.66 },
+  hummer: { bw: 40, bh: 20, tilt: -0.5, hr: 11, neck: 0, leg: 0, tail: 16, base: 'flower', sc: 1.2 },
+  soar: { bw: 50, bh: 20, tilt: 0, hr: 11, neck: 4, leg: 0, tail: 18, base: 'sky', sc: 1 },
+};
+const BG = { branch: '#cfe3d4', water: '#bfd9ea', marsh: '#d2e4cf', sand: '#eadfc6', ice: '#dbe8f1', grass: '#e2e6c2', flower: '#f0d9e2', sky: '#cfe1f1' };
+
+function birdArt(b) {
+  const W = 240, H = 160;
+  const g = createGraphics(W, H); g.pixelDensity(2);
+  randomSeed(b.id * 977 + 13); noiseSeed(b.id + 7);
+  const a = b.art; const T = BODY[a.type];
+  // paper + watercolor wash
+  g.background('#fbfaf6');
+  const wash = g.color(BG[T.base]);
+  g.noStroke();
+  for (let k = 0; k < 18; k++) {
+    wash.setAlpha(26);
+    g.fill(wash);
+    g.ellipse(W / 2 + random(-46, 46), H / 2 + random(-26, 26), random(110, 230), random(70, 150));
+  }
+  const ground = { branch: 120, water: 112, marsh: 148, sand: 144, ice: 146, grass: 150, flower: 0, sky: 0 }[T.base];
+  drawBase(g, T.base, W, H, ground);
+  g.push();
+  if (ground) { g.translate(W / 2, ground); g.scale(T.sc); g.translate(-W / 2, -ground); }
+  else { g.translate(W / 2, H / 2); g.scale(T.sc); g.translate(-W / 2, -H / 2); }
+  drawBird(g, a, T, ground, W, H);
+  g.pop();
+  // paper grain
+  g.noStroke();
+  for (let k = 0; k < 1100; k++) { g.fill(70, 55, 40, random(5, 16)); g.rect(random(W), random(H), 1, 1); }
+  return toURL(g, 'image/jpeg');
+}
+
+function drawBase(g, base, W, H, y) {
+  if (base === 'branch') {
+    g.stroke('#6b4a32'); g.strokeWeight(7); g.noFill();
+    g.bezier(-5, y + 6, 70, y - 2, 150, y + 4, W + 5, y - 4);
+    g.strokeWeight(3); g.line(180, y - 1, 210, y - 22);
+    g.noStroke(); g.fill('#5f8f55');
+    [[210, y - 24, 0.6], [196, y - 12, -0.5], [40, y + 2, 0.3]].forEach(([x, yy, r]) => { g.push(); g.translate(x, yy); g.rotate(r); g.ellipse(0, 0, 18, 8); g.pop(); });
+  } else if (base === 'water') {
+    g.noStroke(); g.fill(120, 170, 205, 90); g.rect(0, y, W, H - y);
+    g.stroke(70, 120, 160, 150); g.strokeWeight(1.6); g.noFill();
+    for (let k = 0; k < 6; k++) { const yy = y + 8 + k * 7; const x = random(10, W - 60); g.arc(x, yy, 40, 6, PI, TWO_PI); }
+  } else if (base === 'marsh' || base === 'grass' || base === 'sand' || base === 'ice') {
+    const col = { marsh: '#7aa46a', grass: '#8ea457', sand: '#c9b07a', ice: '#e8f1f7' }[base];
+    g.noStroke(); g.fill(col); g.rect(0, y, W, H - y);
+    if (base === 'ice') { g.stroke('#9fb8c8'); g.strokeWeight(1.2); g.line(0, y, W, y); }
+    if (base === 'marsh' || base === 'grass') {
+      g.stroke(base === 'marsh' ? '#4f7a45' : '#6a7f3a'); g.strokeWeight(1.6);
+      for (let k = 0; k < 22; k++) { const x = random(W); g.line(x, y + 2, x + random(-4, 4), y - random(6, 16)); }
+    }
+  } else if (base === 'flower') {
+    g.stroke('#4f7a45'); g.strokeWeight(3); g.noFill(); g.bezier(200, H, 196, 120, 206, 100, 202, 78);
+    g.noStroke(); g.fill('#c8324a');
+    for (let k = 0; k < 5; k++) { g.push(); g.translate(202, 74); g.rotate(-0.4 + k * 0.22); g.ellipse(0, -10, 8, 22); g.pop(); }
+  } else if (base === 'sky') {
+    g.noStroke(); g.fill(255, 255, 255, 190);
+    [[50, 120], [190, 40]].forEach(([x, y2]) => { g.ellipse(x, y2, 60, 18); g.ellipse(x + 14, y2 - 7, 34, 18); });
+  }
+}
+
+function vext(T) { return Math.abs(Math.sin(T.tilt)) * T.bw / 2 + Math.abs(Math.cos(T.tilt)) * T.bh / 2; }
+function blob(g, x, y, w, h, fillHex, strokeAmt = -0.45) {
+  g.fill(fillHex); g.stroke(shade(g, fillHex, strokeAmt)); g.strokeWeight(1.6);
+  g.ellipse(x, y, w, h);
+}
+
+function drawBird(g, a, T, ground, W, H) {
+  const m = a.marks;
+  const fly = a.type === 'hummer' || a.type === 'soar';
+  const legLen = T.leg * (m.legs === 'long' ? 2.2 : 1);
+  const cx = 110;
+  let cy;
+  if (fly) cy = H / 2 + 6;
+  else if (T.base === 'water') cy = ground - T.bh * 0.12;
+  else cy = ground - legLen - vext(T) * 0.92;
+  const t = T.tilt;
+  const fx = cx + Math.cos(t) * T.bw * 0.43, fy = cy + Math.sin(t) * T.bw * 0.43;
+  const bx = cx - Math.cos(t) * T.bw * 0.42, by = cy - Math.sin(t) * T.bw * 0.42;
+  const hr = T.hr;
+  const hx = fx + hr * 0.35, hy = fy - T.neck - hr * 0.55;
+  const tailCol = m.tailc || a.wing;
+
+  // far wing for fliers
+  if (fly) drawWing(g, a, cx, cy, T, true);
+  // tail (behind body)
+  drawTail(g, a.tail, bx, by, t, T, tailCol, m, ground);
+  // legs
+  if (legLen > 0 && !fly) {
+    g.stroke(a.legs); g.strokeWeight(Math.max(2.2, T.bw / 28));
+    const ly = cy + vext(T) * 0.85;
+    [[cx - T.bw * 0.06, -3], [cx + T.bw * 0.08, 3]].forEach(([lx, d]) => {
+      const gy = ly + legLen;
+      g.line(lx, ly, lx + d, gy);
+      g.line(lx + d, gy, lx + d + 8, gy); g.line(lx + d, gy, lx + d - 4, gy + 1);
+    });
+  }
+  // body
+  g.push(); g.translate(cx, cy); g.rotate(t);
+  blob(g, 0, 0, T.bw, T.bh, a.body);
+  g.noStroke(); g.fill(a.belly);
+  g.ellipse(T.bw * 0.08, T.bh * 0.17, T.bw * 0.72, T.bh * 0.58);
+  if (m.side) { g.fill(m.side); g.ellipse(T.bw * 0.02, T.bh * 0.22, T.bw * 0.35, T.bh * 0.25); }
+  if (m.speckle) {
+    g.fill(m.speckle);
+    for (let k = 0; k < 26; k++) { const ang = random(TWO_PI), r = Math.sqrt(random()) * 0.42; g.ellipse(Math.cos(ang) * T.bw * r, Math.sin(ang) * T.bh * r, 2.6, 2); }
+  }
+  if (!fly) {
+    // folded wing
+    blob(g, -T.bw * 0.08, -T.bh * 0.12, T.bw * 0.7, T.bh * 0.62, a.wing);
+    g.stroke(shade(g, a.wing, -0.35)); g.strokeWeight(1.2);
+    for (let k = 0; k < 4; k++) g.line(-T.bw * 0.43 + k * 4, -T.bh * 0.1 + k * 3, -T.bw * 0.18 + k * 4, -T.bh * 0.02 + k * 3);
+    if (m.patch) { g.noStroke(); g.fill(m.patch); g.ellipse(-T.bw * 0.02, -T.bh * 0.12, T.bw * 0.24, T.bh * 0.2); }
+    if (m.stripes) { g.stroke(m.stripes); g.strokeWeight(2.4); for (let k = 0; k < 3; k++) g.line(-T.bw * 0.25 + k * 8, -T.bh * 0.32, -T.bw * 0.3 + k * 8, T.bh * 0.08); }
+    if (m.tip) { g.noStroke(); g.fill(m.tip); g.ellipse(-T.bw * 0.38, -T.bh * 0.06, T.bw * 0.14, T.bh * 0.2); }
+  }
+  g.pop();
+  if (fly) drawWing(g, a, cx, cy, T, false);
+  // neck
+  if (T.neck > 0) {
+    const nc = m.neck || a.body;
+    g.stroke(shade(g, nc, -0.45)); g.strokeWeight(hr * 1.15 + 3);
+    g.line(fx, fy, hx - hr * 0.15, hy + hr * 0.3);
+    g.stroke(nc); g.strokeWeight(hr * 1.15);
+    g.line(fx, fy, hx - hr * 0.15, hy + hr * 0.3);
+  }
+  if (m.collar) { g.noStroke(); g.fill(m.collar); const t2 = T.neck > 0 ? 0.6 : 0.15; g.ellipse(lerp(fx, hx, t2), lerp(fy, hy, t2) + hr * 0.45, hr * 1.4, hr * 0.42); }
+  if (m.crown) {
+    g.stroke(m.crown); g.strokeWeight(1.6);
+    for (let k = 0; k < 14; k++) { const ang = -PI * 0.95 + k * 0.09; g.line(hx - hr * 0.1, hy - hr * 0.8, hx - hr * 0.1 + Math.cos(ang) * hr * 1.6, hy - hr * 0.8 + Math.sin(ang) * hr * 1.6); }
+  }
+  // crest (behind head)
+  if (m.crest && a.type !== 'owl') {
+    g.fill(m.crest); g.stroke(shade(g, m.crest, -0.45)); g.strokeWeight(1.4);
+    g.triangle(hx - hr * 0.2, hy - hr * 0.7, hx - hr * 1.3, hy - hr * 1.45, hx + hr * 0.3, hy - hr * 0.85);
+    g.triangle(hx - hr * 0.6, hy - hr * 0.4, hx - hr * 1.5, hy - hr * 0.9, hx - hr * 0.1, hy - hr * 0.8);
+  }
+  if (a.type === 'owl' && m.crest) {
+    g.fill(m.crest); g.stroke(shade(g, m.crest, -0.45)); g.strokeWeight(1.4);
+    g.triangle(hx - hr * 0.85, hy - hr * 0.55, hx - hr * 0.75, hy - hr * 1.35, hx - hr * 0.35, hy - hr * 0.8);
+    g.triangle(hx + hr * 0.85, hy - hr * 0.55, hx + hr * 0.75, hy - hr * 1.35, hx + hr * 0.35, hy - hr * 0.8);
+  }
+  // head
+  blob(g, hx, hy, hr * 2, hr * 2 * (a.type === 'owl' ? 0.92 : 1), a.head);
+  g.noStroke();
+  if (m.cap) { g.fill(m.cap); g.arc(hx, hy, hr * 2, hr * 2, PI + 0.25, TWO_PI - 0.15, CHORD); }
+  if (m.disc) { g.fill(m.disc); g.stroke(shade(g, m.disc, -0.3)); g.strokeWeight(1.4); g.ellipse(hx + hr * 0.02, hy + hr * 0.05, hr * 1.7, hr * 1.55); g.noStroke(); }
+  if (m.cheek) { g.fill(m.cheek); g.ellipse(hx + hr * 0.05, hy + hr * 0.38, hr * 1.0, hr * 0.62); }
+  if (m.face) { g.fill(m.face); g.ellipse(hx + hr * 0.35, hy - hr * 0.02, hr * 1.1, hr * 0.62); }
+  if (m.throat) { g.fill(m.throat); g.ellipse(hx + hr * 0.38, hy + hr * 0.72, hr * 0.95, hr * 0.62); }
+  // eyes
+  if (a.type === 'owl') {
+    const ic = m.eyes || '#1a1a1a';
+    [[hx - hr * 0.33, hy - hr * 0.08], [hx + hr * 0.37, hy - hr * 0.08]].forEach(([ex, ey]) => {
+      g.fill('#1a1a1a'); g.circle(ex, ey, hr * 0.62);
+      g.fill(ic); g.circle(ex, ey, hr * 0.5);
+      g.fill('#111111'); g.circle(ex, ey, hr * 0.26);
+      g.fill(255, 255, 255, 220); g.circle(ex - hr * 0.08, ey - hr * 0.08, hr * 0.1);
+    });
+  } else {
+    const ex = hx + hr * 0.38, ey = hy - hr * 0.12;
+    if (m.eyering) { g.fill(m.eyering); g.circle(ex, ey, hr * 0.62); }
+    g.fill('#1a1a1a'); g.circle(ex, ey, hr * 0.38);
+    g.fill(255, 255, 255, 230); g.circle(ex + hr * 0.07, ey - hr * 0.07, hr * 0.12);
+  }
+  // beak
+  g.push();
+  if (a.type === 'owl') { g.translate(hx + hr * 0.02, hy + hr * 0.22); g.rotate(1.35); }
+  else { g.translate(hx + hr * 0.82, hy + hr * 0.12); g.rotate(a.beak === 'bent' ? 0.75 : a.beak === 'curve' ? 0.25 : 0.1); }
+  drawBeak(g, a.beak, hr, a.bill, m);
+  g.pop();
+  if (m.wattle) { g.noStroke(); g.fill(m.wattle); g.ellipse(hx + hr * 0.9, hy + hr * 0.75, hr * 0.35, hr * 0.7); }
+}
+
+function drawWing(g, a, cx, cy, T, far) {
+  const col = far ? shade(g, a.wing, -0.25) : g.color(a.wing);
+  g.fill(col); g.stroke(shade(g, a.wing, -0.5)); g.strokeWeight(1.5);
+  if (a.type === 'hummer') {
+    col.setAlpha(150); g.fill(col);
+    g.push(); g.translate(cx - 2, cy - 4); g.rotate(far ? -2.1 : -1.7); g.ellipse(26, 0, 52, 14); g.pop();
+    return;
+  }
+  const span = a.marks.patch ? 1.2 : 1; // condor-like long wings
+  const d = far ? -10 : 0;
+  g.beginShape();
+  g.vertex(cx + 8 + d, cy - 4);
+  g.vertex(cx - 18 + d, cy - 46 * span);
+  g.vertex(cx - 48 + d, cy - 64 * span);
+  g.vertex(cx - 36 + d, cy - 40 * span);
+  g.vertex(cx - 16 + d, cy + 4);
+  g.endShape(CLOSE);
+  if (!far && a.marks.patch) { g.noStroke(); g.fill(a.marks.patch); g.quad(cx - 2, cy - 18, cx - 20, cy - 40, cx - 26, cy - 34, cx - 8, cy - 8); }
+  if (!far && a.marks.tip) { g.noStroke(); g.fill(a.marks.tip); g.triangle(cx - 48 + d, cy - 64, cx - 34, cy - 54, cx - 40, cy - 46); }
+}
+
+function drawTail(g, type, bx, by, t, T, col, m, ground) {
+  const len = T.tail; const w = T.bh * 0.36;
+  g.fill(col); g.stroke(shade(g, col, -0.45)); g.strokeWeight(1.5);
+  if (type === 'fan') {
+    g.push(); g.translate(bx + 8, by - T.bh * 0.25);
+    g.arc(0, 0, T.bh * 2.1, T.bh * 2.1, PI * 0.95, PI * 2.05, PIE);
+    g.stroke(shade(g, col, 0.35)); g.strokeWeight(1.4);
+    for (let k = 0; k < 9; k++) { const ang = PI + k * 0.13; g.line(0, 0, Math.cos(ang) * T.bh, Math.sin(ang) * T.bh); }
+    g.pop(); return;
+  }
+  if (type === 'train') {
+    g.beginShape(); g.vertex(bx + 6, by - 8); g.vertex(bx - 92, ground - 6); g.vertex(bx - 70, ground + 4); g.vertex(bx + 10, by + 12); g.endShape(CLOSE);
+    g.noStroke();
+    for (let k = 0; k < 5; k++) { const p = (k + 1) / 6; const x = lerp(bx, bx - 82, p), y = lerp(by, ground - 2, p); g.fill('#c99a2a'); g.circle(x, y, 9); g.fill('#1f5fb0'); g.circle(x, y, 5); }
+    return;
+  }
+  if (type === 'lyre') {
+    g.noFill(); g.strokeWeight(5); g.stroke(col);
+    g.bezier(bx, by, bx - 30, by - 10, bx - 40, by - 60, bx - 20, by - 80);
+    g.bezier(bx, by, bx - 20, by - 10, bx - 10, by - 60, bx + 4, by - 78);
+    g.strokeWeight(1); g.stroke(shade(g, col, -0.4));
+    for (let k = 0; k < 10; k++) g.line(bx - 6 - k * 2, by - 6 - k * 6, bx - 26 + k, by - 12 - k * 6);
+    return;
+  }
+  if (type === 'streamers') {
+    g.noFill(); g.strokeWeight(3.5); g.stroke(col);
+    g.bezier(bx, by, bx - 20, by + 30, bx - 40, by + 50, bx - 70, by + 60);
+    g.bezier(bx, by, bx - 14, by + 36, bx - 30, by + 58, bx - 56, by + 72);
+    return;
+  }
+  g.push(); g.translate(bx, by); g.rotate(t + PI + 0.12);
+  if (type === 'short') g.quad(0, -w * 0.5, len, -w * 0.4, len, w * 0.4, 0, w * 0.5);
+  else if (type === 'long') g.quad(0, -w * 0.4, len * 1.35, -w * 0.32, len * 1.35, w * 0.32, 0, w * 0.4);
+  else if (type === 'fork') { g.beginShape(); g.vertex(0, -w * 0.4); g.vertex(len * 1.7, -w * 0.55); g.vertex(len * 0.9, 0); g.vertex(len * 1.7, w * 0.55); g.vertex(0, w * 0.4); g.endShape(CLOSE); }
+  g.pop();
+}
+
+function drawBeak(g, type, hr, col, m) {
+  g.fill(col); g.stroke(shade(g, col, -0.5)); g.strokeWeight(1.3);
+  const tri = (L, h) => g.triangle(-2, -h, -2, h, L, h * 0.15);
+  switch (type) {
+    case 'cone': tri(hr * 0.7, hr * 0.36); break;
+    case 'short': tri(hr * 0.62, hr * 0.2); break;
+    case 'long': tri(hr * 2.0, hr * 0.12); break;
+    case 'dagger': tri(hr * 2.5, hr * 0.18); break;
+    case 'heavy': tri(hr * 1.15, hr * 0.32); break;
+    case 'needle': tri(hr * 2.6, hr * 0.07); break;
+    case 'wide': tri(hr * 0.55, hr * 0.42); break;
+    case 'hook':
+      g.beginShape(); g.vertex(-2, -hr * 0.3); g.bezierVertex(hr * 0.5, -hr * 0.3, hr * 0.8, -hr * 0.05, hr * 0.62, hr * 0.38);
+      g.bezierVertex(hr * 0.5, hr * 0.15, hr * 0.3, hr * 0.22, -2, hr * 0.25); g.endShape(CLOSE); break;
+    case 'curve':
+      g.beginShape(); g.vertex(-2, -hr * 0.14); g.bezierVertex(hr, -hr * 0.1, hr * 1.7, hr * 0.2, hr * 2.1, hr * 0.7);
+      g.bezierVertex(hr * 1.6, hr * 0.35, hr * 0.9, hr * 0.14, -2, hr * 0.14); g.endShape(CLOSE); break;
+    case 'spoon': tri(hr * 2.0, hr * 0.12); g.ellipse(hr * 2.1, hr * 0.05, hr * 0.8, hr * 0.55); break;
+    case 'pouch':
+      g.fill(shade(g, col, 0.25)); g.beginShape(); g.vertex(0, hr * 0.1); g.bezierVertex(hr, hr * 0.9, hr * 2.2, hr * 0.7, hr * 3, hr * 0.15); g.endShape(CLOSE);
+      g.fill(col); g.quad(-2, -hr * 0.16, hr * 3.1, -hr * 0.05, hr * 3.1, hr * 0.12, -2, hr * 0.14); break;
+    case 'flat':
+      g.rect(-2, -hr * 0.18, hr * 1.15, hr * 0.42, hr * 0.2); break;
+    case 'big':
+      g.triangle(-2, -hr * 0.5, -2, hr * 0.5, hr * 0.95, hr * 0.12);
+      g.stroke('#3b5a8a'); g.strokeWeight(2.2); g.line(0, -hr * 0.42, 0, hr * 0.42);
+      g.stroke('#f2d23a'); g.line(hr * 0.35, -hr * 0.3, hr * 0.35, hr * 0.32); break;
+    case 'toucan':
+      g.beginShape(); g.vertex(-2, -hr * 0.55); g.bezierVertex(hr * 1.4, -hr * 0.85, hr * 2.6, -hr * 0.5, hr * 3.0, hr * 0.15);
+      g.bezierVertex(hr * 2.0, hr * 0.35, hr * 1, hr * 0.5, -2, hr * 0.5); g.endShape(CLOSE);
+      if (m.tip) { g.noStroke(); g.fill(m.tip); g.ellipse(hr * 2.6, -hr * 0.05, hr * 0.8, hr * 0.5); } break;
+    case 'shoe':
+      g.beginShape(); g.vertex(-2, -hr * 0.55); g.bezierVertex(hr, -hr * 0.75, hr * 1.7, -hr * 0.5, hr * 1.8, hr * 0.2);
+      g.bezierVertex(hr * 1.6, hr * 0.55, hr * 0.8, hr * 0.7, -2, hr * 0.6); g.endShape(CLOSE);
+      g.fill(shade(g, col, -0.4)); g.noStroke(); g.triangle(hr * 1.6, hr * 0.05, hr * 1.85, hr * 0.15, hr * 1.6, hr * 0.45); break;
+    case 'bent':
+      g.beginShape(); g.vertex(-2, -hr * 0.32); g.vertex(hr * 0.9, -hr * 0.22); g.vertex(hr * 1.6, hr * 0.5); g.vertex(hr * 1.3, hr * 0.62); g.vertex(hr * 0.75, hr * 0.15); g.vertex(-2, hr * 0.3); g.endShape(CLOSE);
+      g.noStroke(); g.fill('#1a1a1a'); g.triangle(hr * 1.1, hr * 0.15, hr * 1.6, hr * 0.5, hr * 1.3, hr * 0.62); break;
+    default: tri(hr * 0.62, hr * 0.2);
+  }
+}
+
+</script>
+</body>
+</html>
